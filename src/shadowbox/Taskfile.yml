@@ -60,6 +60,7 @@ tasks:
       SB_PUBLIC_IP: localhost
       SB_CERTIFICATE_FILE: '{{joinPath .RUN_DIR "/shadowbox-selfsigned-dev.crt"}}'
       SB_PRIVATE_KEY_FILE: '{{joinPath .RUN_DIR "/shadowbox-selfsigned-dev.key"}}'
+      LOG_LEVEL: '{{.LOG_LEVEL}}'
     cmds:
       - echo Target platform is {{.TARGET_OS}}/{{.TARGET_ARCH}}
       - echo "Using directory {{.RUN_DIR}}"

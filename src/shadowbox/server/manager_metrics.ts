@@ -115,38 +115,19 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
     this.prunePrometheusCache();
 
     const [
-      bandwidth,
-      bandwidthRange,
-      dataTransferredByLocation,
-      tunnelTimeByLocation,
-      dataTransferredByAccessKey,
-      tunnelTimeByAccessKey,
       dataTransferredByAccessKeyRange,
+      dataTransferredByLocationRange,
       tunnelTimeByAccessKeyRange,
+      tunnelTimeByLocation,
     ] = await Promise.all([
-      this.cachedPrometheusClient.query(
-        `sum(rate(shadowsocks_data_bytes_per_location{dir=~"c<p|p>t"}[${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s]))`
-      ),
       this.cachedPrometheusClient.queryRange(
-        `sum(rate(shadowsocks_data_bytes_per_location{dir=~"c<p|p>t"}[${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s]))`,
+        `sum(increase(shadowsocks_data_bytes{dir=~"c<p|p>t"}[${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s])) by (access_key)`,
         start,
         end,
         `${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s`
       ),
-      this.cachedPrometheusClient.query(
-        `sum(increase(shadowsocks_data_bytes_per_location{dir=~"c<p|p>t"}[${timeframe.seconds}s])) by (location, asn, asorg)`
-      ),
-      this.cachedPrometheusClient.query(
-        `sum(increase(shadowsocks_tunnel_time_seconds_per_location[${timeframe.seconds}s])) by (location, asn, asorg)`
-      ),
-      this.cachedPrometheusClient.query(
-        `sum(increase(shadowsocks_data_bytes{dir=~"c<p|p>t"}[${timeframe.seconds}s])) by (access_key)`
-      ),
-      this.cachedPrometheusClient.query(
-        `sum(increase(shadowsocks_tunnel_time_seconds[${timeframe.seconds}s])) by (access_key)`
-      ),
       this.cachedPrometheusClient.queryRange(
-        `sum(increase(shadowsocks_data_bytes{dir=~"c<p|p>t"}[${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s])) by (access_key)`,
+        `sum(increase(shadowsocks_data_bytes_per_location{dir=~"c<p|p>t"}[${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s])) by (location, asn, asorg)`,
         start,
         end,
         `${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s`
@@ -156,6 +137,9 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
         start,
         end,
         `${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s`
+      ),
+      this.cachedPrometheusClient.query(
+        `sum(increase(shadowsocks_tunnel_time_seconds_per_location[${timeframe.seconds}s])) by (location, asn, asorg)`
       ),
     ]);
 
@@ -168,51 +152,56 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
       },
       locations: [],
     };
-    for (const result of bandwidth.result) {
-      if (result.value) {
-        serverMetrics.bandwidth.current.data.bytes = parseFloat(result.value[1]);
-        serverMetrics.bandwidth.current.timestamp = result.value[0];
-      }
-      break; // There should only be one result.
-    }
-    for (const result of bandwidthRange.result) {
-      const peakDataTransferred = findPeak(result.values ?? []);
-      if (peakDataTransferred !== null) {
-        const peakValue = parseFloat(peakDataTransferred[1]);
-        if (peakValue > 0) {
-          serverMetrics.bandwidth.peak.data.bytes = peakValue;
-          serverMetrics.bandwidth.peak.timestamp = Math.min(now, peakDataTransferred[0]);
-        }
-      }
-      break; // There should only be one result.
-    }
 
-    const locationMap = new Map<string, ServerMetricsLocationEntry>();
-    for (const result of tunnelTimeByLocation.result) {
-      const entry = getServerMetricsLocationEntry(locationMap, result.metric);
-      const tunnelTime = result.value ? parseFloat(result.value[1]) : 0;
-      entry.tunnelTime.seconds = tunnelTime;
-      serverMetrics.tunnelTime.seconds += tunnelTime;
-    }
-    for (const result of dataTransferredByLocation.result) {
-      const entry = getServerMetricsLocationEntry(locationMap, result.metric);
-      const bytes = result.value ? parseFloat(result.value[1]) : 0;
-      entry.dataTransferred.bytes = bytes;
-      serverMetrics.dataTransferred.bytes += bytes;
-    }
-    serverMetrics.locations = Array.from(locationMap.values());
+    const bandwidthTimeseriesIndex = new Map<number, string>();
 
     const accessKeyMap = new Map<string, ServerMetricsAccessKeyEntry>();
-    for (const result of tunnelTimeByAccessKey.result) {
+    for (const result of dataTransferredByAccessKeyRange.result) {
       const entry = getServerMetricsAccessKeyEntry(accessKeyMap, result.metric);
-      entry.tunnelTime.seconds = result.value ? parseFloat(result.value[1]) : 0;
+      const lastTrafficSeen = findLastNonZero(result.values ?? []);
+
+      entry.connection.lastTrafficSeen = lastTrafficSeen ? Math.min(now, lastTrafficSeen[0]) : null;
+      entry.dataTransferred.bytes = findSum(result.values ?? []);
+
+      for (const entryIndex in result.values) {
+        const [timestamp, value] = result.values[entryIndex];
+
+        bandwidthTimeseriesIndex.set(
+          timestamp,
+          bandwidthTimeseriesIndex.has(timestamp)
+            ? String(
+                parseFloat(bandwidthTimeseriesIndex.get(timestamp) as string) + parseFloat(value)
+              )
+            : value
+        );
+      }
     }
-    for (const result of dataTransferredByAccessKey.result) {
-      const entry = getServerMetricsAccessKeyEntry(accessKeyMap, result.metric);
-      entry.dataTransferred.bytes = result.value ? parseFloat(result.value[1]) : 0;
+
+    const bandwidthRangeValues = [...bandwidthTimeseriesIndex.entries()].sort(
+      (a, b) => a[0] - b[0]
+    );
+
+    const currentBandwidth = bandwidthRangeValues[bandwidthRangeValues.length - 1] ?? [0, '0'];
+
+    // convert increase() into rate()
+    serverMetrics.bandwidth.current.data.bytes =
+      parseFloat(currentBandwidth[1]) / PROMETHEUS_RANGE_QUERY_STEP_SECONDS;
+    serverMetrics.bandwidth.current.timestamp = currentBandwidth[0];
+
+    const peakDataTransferred = findPeak(bandwidthRangeValues);
+    if (peakDataTransferred !== null) {
+      const peakValue = parseFloat(peakDataTransferred[1]);
+
+      if (peakValue > 0) {
+        // convert increase() into rate()
+        serverMetrics.bandwidth.peak.data.bytes = peakValue / PROMETHEUS_RANGE_QUERY_STEP_SECONDS;
+        serverMetrics.bandwidth.peak.timestamp = Math.min(now, peakDataTransferred[0]);
+      }
     }
+
     for (const result of tunnelTimeByAccessKeyRange.result) {
       const entry = getServerMetricsAccessKeyEntry(accessKeyMap, result.metric);
+
       const peakTunnelTimeSec = findPeak(result.values ?? []);
       if (peakTunnelTimeSec !== null) {
         const peakValue = parseFloat(peakTunnelTimeSec[1]);
@@ -222,12 +211,28 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
           entry.connection.peakDeviceCount.timestamp = Math.min(now, peakTunnelTimeSec[0]);
         }
       }
+
+      entry.tunnelTime.seconds = findSum(result.values ?? []);
     }
-    for (const result of dataTransferredByAccessKeyRange.result) {
-      const entry = getServerMetricsAccessKeyEntry(accessKeyMap, result.metric);
-      const lastTrafficSeen = findLastNonZero(result.values ?? []);
-      entry.connection.lastTrafficSeen = lastTrafficSeen ? Math.min(now, lastTrafficSeen[0]) : null;
+
+    const locationMap = new Map<string, ServerMetricsLocationEntry>();
+    for (const result of dataTransferredByLocationRange.result) {
+      const entry = getServerMetricsLocationEntry(locationMap, result.metric);
+      const bytes = findSum(result.values ?? []);
+
+      entry.dataTransferred.bytes += bytes;
+      serverMetrics.dataTransferred.bytes += bytes;
     }
+
+    for (const result of tunnelTimeByLocation.result) {
+      const entry = getServerMetricsLocationEntry(locationMap, result.metric);
+      const tunnelTime = result.value ? parseFloat(result.value[1]) : 0;
+
+      entry.tunnelTime.seconds = tunnelTime;
+      serverMetrics.tunnelTime.seconds += tunnelTime;
+    }
+
+    serverMetrics.locations = Array.from(locationMap.values());
 
     return {
       server: serverMetrics,
@@ -349,4 +354,15 @@ function findLastNonZero(values: PrometheusValue[]): PrometheusValue | null {
     }
   }
   return null;
+}
+
+/**
+ * Finds the sum of the values in an array of PrometheusValues.
+ */
+function findSum(values: PrometheusValue[]): number {
+  let sum = 0;
+  for (const value of values) {
+    sum += parseFloat(value[1]);
+  }
+  return sum;
 }

@@ -628,7 +628,7 @@ export class ShadowsocksManagerService {
   }
 
   async getServerMetrics(req: RequestType, res: ResponseType, next: restify.Next) {
-    logging.debug(`getServerMetrics request ${JSON.stringify(req.params)}`);
+    logging.debug(`getServerMetrics request ${JSON.stringify(req.query)}`);
 
     let seconds;
     try {
