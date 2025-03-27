@@ -115,7 +115,6 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
     this.prunePrometheusCache();
 
     const [
-      bandwidth,
       bandwidthRange,
       dataTransferredByLocation,
       tunnelTimeByLocation,
@@ -124,9 +123,6 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
       dataTransferredByAccessKeyRange,
       tunnelTimeByAccessKeyRange,
     ] = await Promise.all([
-      this.cachedPrometheusClient.query(
-        `sum(rate(shadowsocks_data_bytes_per_location{dir=~"c<p|p>t"}[${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s]))`
-      ),
       this.cachedPrometheusClient.queryRange(
         `sum(rate(shadowsocks_data_bytes_per_location{dir=~"c<p|p>t"}[${PROMETHEUS_RANGE_QUERY_STEP_SECONDS}s]))`,
         start,
@@ -168,13 +164,15 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
       },
       locations: [],
     };
-    for (const result of bandwidth.result) {
-      if (result.value) {
-        serverMetrics.bandwidth.current.data.bytes = parseFloat(result.value[1]);
-        serverMetrics.bandwidth.current.timestamp = result.value[0];
-      }
-      break; // There should only be one result.
+
+    const bandwidthRangeValues = bandwidthRange.result[0].values ?? [];
+    const currentBandwidth = bandwidthRangeValues[bandwidthRangeValues.length - 1];
+
+    if (currentBandwidth) {
+      serverMetrics.bandwidth.current.data.bytes = parseFloat(currentBandwidth[1]);
+      serverMetrics.bandwidth.current.timestamp = currentBandwidth[0];
     }
+
     for (const result of bandwidthRange.result) {
       const peakDataTransferred = findPeak(result.values ?? []);
       if (peakDataTransferred !== null) {
