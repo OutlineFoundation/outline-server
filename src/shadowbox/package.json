@@ -26,7 +26,7 @@
     "@types/restify": "^8.4.2",
     "@types/restify-cors-middleware": "^1.0.1",
     "@types/tmp": "^0.2.1",
-    "tmp": "^0.2.1",
+    "tmp": "^0.2.4",
     "ts-loader": "^9.5.0",
     "webpack": "^5.88.2",
     "webpack-cli": "^5.1.4"
