@@ -201,8 +201,8 @@ export function convertTimeRangeToSeconds(timeRange: string): number {
   const timeRangeValue = Number(timeRange.slice(0, -1));
   const timeRangeUnit = timeRange.slice(-1);
 
-  if (isNaN(timeRangeValue) || !TIME_RANGE_UNIT_TO_SECONDS_MULTIPLYER[timeRangeUnit]) {
-    throw new TypeError(`Invalid time range: ${timeRange}`);
+  if (isNaN(timeRangeValue) || timeRangeValue <= 0 || !TIME_RANGE_UNIT_TO_SECONDS_MULTIPLYER[timeRangeUnit]) {
+    throw new TypeError(`Invalid time range: ${timeRange}. Must be a positive number followed by 's', 'h', 'd', or 'w'.`);
   }
 
   return timeRangeValue * TIME_RANGE_UNIT_TO_SECONDS_MULTIPLYER[timeRangeUnit];
@@ -616,8 +616,41 @@ export class ShadowsocksManagerService {
 
   async getDataUsage(req: RequestType, res: ResponseType, next: restify.Next) {
     try {
-      logging.debug(`getDataUsage request ${JSON.stringify(req.params)}`);
-      const response = await this.managerMetrics.getOutboundByteTransfer({hours: 30 * 24});
+      logging.debug(
+        `getDataUsage request ${JSON.stringify(req.params)} ${JSON.stringify(req.query)}`
+      );
+
+      // Default to 30 days for backward compatibility
+      const DEFAULT_TIME_RANGE = '30d';
+
+      let timeRange = DEFAULT_TIME_RANGE;
+      if (req.query?.last !== undefined) {
+        const lastParam = req.query.last;
+        if (typeof lastParam !== 'string') {
+          return next(
+            new restifyErrors.InvalidArgumentError(
+              {statusCode: 400},
+              'Parameter `last` must be a string in format like "2h", "30d", or "1w"'
+            )
+          );
+        }
+        timeRange = lastParam;
+      }
+
+      let seconds: number;
+      try {
+        seconds = convertTimeRangeToSeconds(timeRange);
+      } catch (error) {
+        return next(
+          new restifyErrors.InvalidArgumentError(
+            {statusCode: 400},
+            `Invalid time range: ${timeRange}. Must be a positive number followed by 'h', 'd', or 'w'.`
+          )
+        );
+      }
+
+      const hours = seconds / 3600;
+      const response = await this.managerMetrics.getOutboundByteTransfer({hours});
       res.send(HttpSuccess.OK, response);
       logging.debug(`getDataUsage response ${JSON.stringify(response)}`);
       return next();

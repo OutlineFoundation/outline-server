@@ -506,9 +506,19 @@ paths:
           description: Access key inexistent
   /metrics/transfer:
     get:
-      description: Returns the data transferred per access key
+      description: Returns the data transferred per access key for the specified time duration
       tags:
         - Access Key
+      parameters:
+        - name: last
+          in: query
+          required: false
+          description: Time duration to retrieve data usage for (default is 30d = 30 days). Format is a number followed by a unit - h (hours), d (days), or w (weeks).
+          schema:
+            type: string
+            pattern: '^\d+[hdw]$'
+            default: '30d'
+          example: '2h'
       responses:
         '200':
           description: The data transferred by each access key
@@ -524,6 +534,8 @@ paths:
               examples:
                 '0':
                   value: '{"bytesTransferredByUserId":{"1":1008040941,"2":5958113497,"3":752221577}}'
+        '400':
+          description: Invalid hours parameter
   /metrics/enabled:
     get:
       description: Returns whether metrics is being shared

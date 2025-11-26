@@ -1037,6 +1037,179 @@ describe('ShadowsocksManagerService', () => {
     });
   });
 
+  describe('getDataUsage', () => {
+    it('Uses default 30-day timeframe when no last parameter provided', async (done) => {
+      const mockMetrics = jasmine.createSpyObj<ManagerMetrics>('ManagerMetrics', [
+        'getOutboundByteTransfer',
+      ]);
+      const expectedResponse = {bytesTransferredByUserId: {key1: 1000, key2: 2000}};
+      mockMetrics.getOutboundByteTransfer.and.returnValue(Promise.resolve(expectedResponse));
+
+      const service = new ShadowsocksManagerServiceBuilder().managerMetrics(mockMetrics).build();
+
+      service.getDataUsage(
+        {params: {}, query: {}},
+        {
+          send: (httpCode, data) => {
+            expect(httpCode).toEqual(200);
+            expect(data).toEqual(expectedResponse);
+            // Expect default 30 days = 30 * 24 = 720 hours
+            expect(mockMetrics.getOutboundByteTransfer).toHaveBeenCalledWith({hours: 720});
+            responseProcessed = true;
+          },
+        },
+        done
+      );
+    });
+
+    it('Uses provided last parameter correctly', async (done) => {
+      const mockMetrics = jasmine.createSpyObj<ManagerMetrics>('ManagerMetrics', [
+        'getOutboundByteTransfer',
+      ]);
+      const expectedResponse = {bytesTransferredByUserId: {key1: 1500}};
+      mockMetrics.getOutboundByteTransfer.and.returnValue(Promise.resolve(expectedResponse));
+
+      const service = new ShadowsocksManagerServiceBuilder().managerMetrics(mockMetrics).build();
+
+      service.getDataUsage(
+        {params: {}, query: {last: '2d'}}, // 2 days = 48 hours
+        {
+          send: (httpCode, data) => {
+            expect(httpCode).toEqual(200);
+            expect(data).toEqual(expectedResponse);
+            expect(mockMetrics.getOutboundByteTransfer).toHaveBeenCalledWith({hours: 48});
+            responseProcessed = true;
+          },
+        },
+        done
+      );
+    });
+
+    it('Handles hours format correctly', async (done) => {
+      const mockMetrics = jasmine.createSpyObj<ManagerMetrics>('ManagerMetrics', [
+        'getOutboundByteTransfer',
+      ]);
+      const expectedResponse = {bytesTransferredByUserId: {key1: 3000}};
+      mockMetrics.getOutboundByteTransfer.and.returnValue(Promise.resolve(expectedResponse));
+
+      const service = new ShadowsocksManagerServiceBuilder().managerMetrics(mockMetrics).build();
+
+      service.getDataUsage(
+        {params: {}, query: {last: '24h'}}, // 24 hours
+        {
+          send: (httpCode, data) => {
+            expect(httpCode).toEqual(200);
+            expect(data).toEqual(expectedResponse);
+            expect(mockMetrics.getOutboundByteTransfer).toHaveBeenCalledWith({hours: 24});
+            responseProcessed = true;
+          },
+        },
+        done
+      );
+    });
+
+    it('Rejects negative last parameter', async (done) => {
+      const service = new ShadowsocksManagerServiceBuilder().build();
+      const res = {send: SEND_NOTHING};
+
+      service.getDataUsage({params: {}, query: {last: '-12h'}}, res, (error) => {
+        expect(error.statusCode).toEqual(400);
+        expect(error.message).toContain('Invalid time range');
+        responseProcessed = true;
+        done();
+      });
+    });
+
+    it('Rejects zero last parameter', async (done) => {
+      const service = new ShadowsocksManagerServiceBuilder().build();
+      const res = {send: SEND_NOTHING};
+
+      service.getDataUsage({params: {}, query: {last: '0h'}}, res, (error) => {
+        expect(error.statusCode).toEqual(400);
+        expect(error.message).toContain('Invalid time range');
+        responseProcessed = true;
+        done();
+      });
+    });
+
+    it('Rejects invalid string last parameter', async (done) => {
+      const service = new ShadowsocksManagerServiceBuilder().build();
+      const res = {send: SEND_NOTHING};
+
+      service.getDataUsage({params: {}, query: {last: 'invalid'}}, res, (error) => {
+        expect(error.statusCode).toEqual(400);
+        expect(error.message).toContain('Invalid time range');
+        responseProcessed = true;
+        done();
+      });
+    });
+
+    it('Rejects non-string last parameter', async (done) => {
+      const service = new ShadowsocksManagerServiceBuilder().build();
+      const res = {send: SEND_NOTHING};
+
+      service.getDataUsage({params: {}, query: {last: {invalid: 'object'}}}, res, (error) => {
+        expect(error.statusCode).toEqual(400);
+        expect(error.message).toContain('Parameter `last` must be a string');
+        responseProcessed = true;
+        done();
+      });
+    });
+
+    it('Handles weeks format correctly', async (done) => {
+      const mockMetrics = jasmine.createSpyObj<ManagerMetrics>('ManagerMetrics', [
+        'getOutboundByteTransfer',
+      ]);
+      const expectedResponse = {bytesTransferredByUserId: {key1: 5000}};
+      mockMetrics.getOutboundByteTransfer.and.returnValue(Promise.resolve(expectedResponse));
+
+      const service = new ShadowsocksManagerServiceBuilder().managerMetrics(mockMetrics).build();
+
+      service.getDataUsage(
+        {params: {}, query: {last: '2w'}}, // 2 weeks = 14 days = 336 hours
+        {
+          send: (httpCode, data) => {
+            expect(httpCode).toEqual(200);
+            expect(data).toEqual(expectedResponse);
+            expect(mockMetrics.getOutboundByteTransfer).toHaveBeenCalledWith({hours: 336});
+            responseProcessed = true;
+          },
+        },
+        done
+      );
+    });
+
+    it('Rejects invalid time unit', async (done) => {
+      const service = new ShadowsocksManagerServiceBuilder().build();
+      const res = {send: SEND_NOTHING};
+
+      service.getDataUsage({params: {}, query: {last: '30s'}}, res, (error) => {
+        expect(error.statusCode).toEqual(400);
+        expect(error.message).toContain('Invalid time range');
+        responseProcessed = true;
+        done();
+      });
+    });
+
+    it('Handles manager metrics error properly', async (done) => {
+      const mockMetrics = jasmine.createSpyObj<ManagerMetrics>('ManagerMetrics', [
+        'getOutboundByteTransfer',
+      ]);
+      mockMetrics.getOutboundByteTransfer.and.returnValue(
+        Promise.reject(new Error('Prometheus error'))
+      );
+
+      const service = new ShadowsocksManagerServiceBuilder().managerMetrics(mockMetrics).build();
+      const res = {send: SEND_NOTHING};
+
+      service.getDataUsage({params: {}, query: {last: '24h'}}, res, (error) => {
+        expect(error.statusCode).toEqual(500);
+        responseProcessed = true;
+        done();
+      });
+    });
+  });
+
   describe('getShareMetrics', () => {
     it('Returns value from sharedMetrics', (done) => {
       const sharedMetrics = fakeSharedMetricsReporter();
@@ -1211,6 +1384,11 @@ describe('convertTimeRangeToHours', () => {
     expect(() => convertTimeRangeToSeconds('30dd')).toThrow();
     expect(() => convertTimeRangeToSeconds('hi mom')).toThrow();
     expect(() => convertTimeRangeToSeconds('1j')).toThrow();
+  });
+
+  it('throws when zero or negative values are provided', () => {
+    expect(() => convertTimeRangeToSeconds('0h')).toThrow();
+    expect(() => convertTimeRangeToSeconds('-5d')).toThrow();
   });
 });
 
