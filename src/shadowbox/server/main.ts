@@ -33,6 +33,8 @@ import {bindService, ShadowsocksManagerService} from './manager_service';
 import {OutlineShadowsocksServer} from './outline_shadowsocks_server';
 import {AccessKeyConfigJson, ServerAccessKeyRepository} from './server_access_key';
 import * as server_config from './server_config';
+import {CertificateManager} from './certificate_manager';
+import * as tls from 'tls';
 import {
   OutlineSharedMetricsPublisher,
   PrometheusUsageMetrics,
@@ -237,6 +239,20 @@ async function main() {
     certificate: fs.readFileSync(certificateFilename),
     key: fs.readFileSync(privateKeyFilename),
   });
+
+  const certificateManager = new CertificateManager(
+    proxyHostname,
+    certificateFilename,
+    privateKeyFilename,
+    process.env.SB_STATE_DIR || DEFAULT_STATE_DIR,
+    (context: tls.SecureContext) => {
+      // Access the underlying node server to update the secure context
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (apiServer.server as any).setSecureContext(context);
+    }
+  );
+  // Do not await this, so the server starts even if certificate generation takes time or fails
+  certificateManager.start();
 
   // Pre-routing handlers
   const cors = corsMiddleware({

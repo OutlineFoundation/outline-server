@@ -29,7 +29,7 @@
     "postinstall": "go build github.com/go-task/task/v3/cmd/task"
   },
   "engines": {
-    "node": "18.x.x"
+    "node": ">=18.0.0"
   },
   "workspaces": [
     "src/*"
