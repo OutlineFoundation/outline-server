@@ -241,19 +241,24 @@ async function main() {
   });
 
   // Do not await this, so the server starts even if certificate generation takes time or fails
-  createCertificateManager(
-    proxyHostname,
-    certificateFilename,
-    privateKeyFilename,
-    process.env.SB_STATE_DIR || DEFAULT_STATE_DIR,
-    (context: tls.SecureContext) => {
-      // Access the underlying node server to update the secure context
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (apiServer.server as any).setSecureContext(context);
+  (async () => {
+    try {
+      const certificateManager = await createCertificateManager(
+        proxyHostname,
+        certificateFilename,
+        privateKeyFilename,
+        process.env.SB_STATE_DIR || DEFAULT_STATE_DIR,
+        (context: tls.SecureContext) => {
+          // Access the underlying node server to update the secure context
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (apiServer.server as any).setSecureContext(context);
+        }
+      );
+      await certificateManager.start();
+    } catch (error) {
+      logging.error(`Failed to initialize CertificateManager: ${error}`);
     }
-  ).then((certificateManager) => {
-    certificateManager.start();
-  });
+  })();
 
   // Pre-routing handlers
   const cors = corsMiddleware({
