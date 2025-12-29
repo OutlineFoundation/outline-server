@@ -33,7 +33,7 @@ import {bindService, ShadowsocksManagerService} from './manager_service';
 import {OutlineShadowsocksServer} from './outline_shadowsocks_server';
 import {AccessKeyConfigJson, ServerAccessKeyRepository} from './server_access_key';
 import * as server_config from './server_config';
-import {CertificateManager} from './certificate_manager';
+import {createCertificateManager} from './certificate_manager';
 import * as tls from 'tls';
 import {
   OutlineSharedMetricsPublisher,
@@ -240,7 +240,8 @@ async function main() {
     key: fs.readFileSync(privateKeyFilename),
   });
 
-  const certificateManager = new CertificateManager(
+  // Do not await this, so the server starts even if certificate generation takes time or fails
+  createCertificateManager(
     proxyHostname,
     certificateFilename,
     privateKeyFilename,
@@ -250,9 +251,9 @@ async function main() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (apiServer.server as any).setSecureContext(context);
     }
-  );
-  // Do not await this, so the server starts even if certificate generation takes time or fails
-  certificateManager.start();
+  ).then((certificateManager) => {
+    certificateManager.start();
+  });
 
   // Pre-routing handlers
   const cors = corsMiddleware({

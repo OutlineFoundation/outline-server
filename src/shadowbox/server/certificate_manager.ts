@@ -24,26 +24,47 @@ import * as logging from '../infrastructure/logging';
 const RENEW_THRESHOLD_DAYS = 30;
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-export class CertificateManager {
-  private client: acme.Client;
-  private accountKeyPath: string;
+export async function createCertificateManager(
+  hostname: string,
+  certFile: string,
+  keyFile: string,
+  stateDir: string,
+  onUpdate: (context: tls.SecureContext) => void
+): Promise<CertificateManager> {
+  const accountKeyPath = path.join(stateDir, 'acme-account.key');
+  let accountKey: Buffer;
 
+  if (fs.existsSync(accountKeyPath)) {
+    logging.info(`Loading ACME account key from ${accountKeyPath}`);
+    accountKey = fs.readFileSync(accountKeyPath);
+  } else {
+    logging.info('Generating new ACME account key...');
+    accountKey = await acme.crypto.createPrivateKey();
+    fs.writeFileSync(accountKeyPath, accountKey);
+  }
+
+  const client = new acme.Client({
+    directoryUrl: acme.directory.letsencrypt.production,
+    accountKey: accountKey,
+  });
+
+  return new CertificateManager(hostname, certFile, keyFile, onUpdate, client);
+}
+
+export class CertificateManager {
   constructor(
     private readonly hostname: string,
     private readonly certFile: string,
     private readonly keyFile: string,
-    private readonly stateDir: string,
-    private readonly onUpdate: (context: tls.SecureContext) => void
-  ) {
-    this.accountKeyPath = path.join(this.stateDir, 'acme-account.key');
-  }
+    private readonly onUpdate: (context: tls.SecureContext) => void,
+    private readonly client: acme.Client
+  ) {}
 
   async start() {
     try {
-      await this.initClient();
       await this.checkAndRenew();
     } catch (e) {
-      logging.error(`CertificateManager initialization failed: ${e}`);
+      logging.error(`CertificateManager initial check failed: ${e}`);
     }
 
     setInterval(() => {
@@ -51,23 +72,6 @@ export class CertificateManager {
         logging.error(`Scheduled certificate renewal failed: ${e}`);
       });
     }, CHECK_INTERVAL_MS);
-  }
-
-  private async initClient() {
-    let accountKey: Buffer;
-    if (fs.existsSync(this.accountKeyPath)) {
-      logging.info(`Loading ACME account key from ${this.accountKeyPath}`);
-      accountKey = fs.readFileSync(this.accountKeyPath);
-    } else {
-      logging.info('Generating new ACME account key...');
-      accountKey = await acme.crypto.createPrivateKey();
-      fs.writeFileSync(this.accountKeyPath, accountKey);
-    }
-
-    this.client = new acme.Client({
-      directoryUrl: acme.directory.letsencrypt.production,
-      accountKey: accountKey,
-    });
   }
 
   private async checkAndRenew() {
