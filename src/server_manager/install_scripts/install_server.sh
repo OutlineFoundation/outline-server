@@ -237,6 +237,8 @@ function create_persisted_state_dir() {
   readonly STATE_DIR="${SHADOWBOX_DIR}/persisted-state"
   mkdir -p "${STATE_DIR}"
   chmod ug+rwx,g+s,o-rwx "${STATE_DIR}"
+  # Ensure the container has write access to the state directory for certificates
+  chmod -R ug+rwx "${STATE_DIR}"
 }
 
 # Generate a secret key for access to the Management API and store it in a tag.
