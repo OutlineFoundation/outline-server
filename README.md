@@ -1,12 +1,12 @@
 # Outline Server
 
-![Build and Test](https://github.com/Jigsaw-Code/outline-server/actions/workflows/build_and_test_debug.yml/badge.svg?branch=master) [![Mattermost](https://badgen.net/badge/Mattermost/Outline%20Community/blue)](https://community.internetfreedomfestival.org/community/channels/outline-community) [![Reddit](https://badgen.net/badge/Reddit/r%2Foutlinevpn/orange)](https://www.reddit.com/r/outlinevpn/)
+![Build and Test](https://github.com/OutlineFoundation/outline-server/actions/workflows/build_and_test_debug.yml/badge.svg?branch=master) [![Mattermost](https://badgen.net/badge/Mattermost/Outline%20Community/blue)](https://community.internetfreedomfestival.org/community/channels/outline-community) [![Reddit](https://badgen.net/badge/Reddit/r%2Foutlinevpn/orange)](https://www.reddit.com/r/outlinevpn/)
 
-Outline Server is the component that provides the Shadowsocks service (via [outline-ss-server](https://github.com/Jigsaw-Code/outline-ss-server/)) and a service management API. You can deploy this server directly following simple instructions in this repository, or if you prefer a ready-to-use graphical interface you can use the [Outline Manager](https://github.com/Jigsaw-Code/outline-apps/).
+Outline Server is the component that provides the Shadowsocks service (via [outline-ss-server](https://github.com/OutlineFoundation/tunnel-server/)) and a service management API. You can deploy this server directly following simple instructions in this repository, or if you prefer a ready-to-use graphical interface you can use the [Outline Manager](https://github.com/OutlineFoundation/outline-apps/).
 
 **Components:**
 
-- **Outline Server** ([`src/shadowbox`](src/shadowbox)): The core proxy server that runs and manages [outline-ss-server](https://github.com/Jigsaw-Code/outline-ss-server/), a Shadowsocks backend. It provides a REST API for access key management.
+- **Outline Server** ([`src/shadowbox`](src/shadowbox)): The core proxy server that runs and manages [outline-ss-server](https://github.com/OutlineFoundation/tunnel-server/), a Shadowsocks backend. It provides a REST API for access key management.
 
 - **Metrics Server** ([`src/metrics_server`](src/metrics_server)): A REST service for optional, anonymous metrics sharing.
 

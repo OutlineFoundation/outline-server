@@ -1,6 +1,6 @@
 # Outline Server (Shadowbox)
 
-The Outline Server, internal name "Shadowbox," is designed to streamline the setup and sharing of Shadowsocks servers. It includes a user management API and creates Shadowsocks instances when needed. It's managed by the [Outline Manager](https://github.com/Jigsaw-Code/outline-apps/) and used as proxy by the [Outline Client](https://github.com/Jigsaw-Code/outline-apps/) apps. Shadowbox is also compatible with standard Shadowsocks clients.
+The Outline Server, internal name "Shadowbox," is designed to streamline the setup and sharing of Shadowsocks servers. It includes a user management API and creates Shadowsocks instances when needed. It's managed by the [Outline Manager](https://github.com/OutlineFoundation/outline-apps/) and used as proxy by the [Outline Client](https://github.com/OutlineFoundation/outline-apps/) apps. Shadowbox is also compatible with standard Shadowsocks clients.
 
 ## Installation
 
@@ -9,7 +9,7 @@ The Outline Server, internal name "Shadowbox," is designed to streamline the set
 1. **Run the Installation Script**
 
    ```sh
-   sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/Jigsaw-Code/outline-apps/master/server_manager/install_scripts/install_server.sh)"
+   sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/OutlineFoundation/outline-apps/master/server_manager/install_scripts/install_server.sh)"
    ```
 
 1. **Customize (Optional)**
@@ -17,7 +17,7 @@ The Outline Server, internal name "Shadowbox," is designed to streamline the set
    Add flags for hostname, port, etc. Example:
 
    ```sh
-   sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/Jigsaw-Code/outline-apps/master/server_manager/install_scripts/install_server.sh)" install_server.sh \
+   sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/OutlineFoundation/outline-apps/master/server_manager/install_scripts/install_server.sh)" install_server.sh \
      --hostname=myserver.com \
      --keys-port=443
    ```
@@ -113,7 +113,7 @@ The Outline Server provides a REST API for access key management. If you know th
 
 1. **Further Options:**
 
-   Consult the [OpenAPI spec](./server/api.yml) and [documentation](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/Jigsaw-Code/outline-server/master/src/shadowbox/server/api.yml) for more options.
+   Consult the [OpenAPI spec](./server/api.yml) and [documentation](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/OutlineFoundation/outline-server/master/src/shadowbox/server/api.yml) for more options.
 
 ## Testing
 

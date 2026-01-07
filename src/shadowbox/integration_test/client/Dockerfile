@@ -14,7 +14,7 @@
 
 # Alpine 3.19 curl is using the c-ares resolver instead of the system resolver,
 # which caused DNS issues. Upgrade once the Alpine image includes the fix. See
-# https://github.com/Jigsaw-Code/outline-server/pull/1566.
+# https://github.com/OutlineFoundation/outline-server/pull/1566.
 FROM docker.io/golang:1-alpine3.18
 
 # curl for fetching pages using the local proxy

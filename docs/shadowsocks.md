@@ -20,6 +20,6 @@ The censors used to block Shadowsocks, but Shadowsocks has evolved, and in 2021,
 
 In 2022 China started blocking seemingly random traffic ([report](https://www.opentech.fund/news/exposing-the-great-firewalls-dynamic-blocking-of-fully-encrypted-traffic/)). While there is no evidence they could detect Shadowsocks, the protocol ended up blocked.
 
-As a reponse, we [added a feature to the Outline Client](https://github.com/Jigsaw-Code/outline-apps/pull/1454) that allows service managers to specify a **[connection prefix disguise](https://www.reddit.com/r/outlinevpn/wiki/index/prefixing/)** to be used in the Shadowsocks initialization, which can be used to bypass the blocking in China by making it look like a protocol that is allowed.
+As a reponse, we [added a feature to the Outline Client](https://github.com/OutlineFoundation/outline-apps/pull/1454) that allows service managers to specify a **[connection prefix disguise](https://www.reddit.com/r/outlinevpn/wiki/index/prefixing/)** to be used in the Shadowsocks initialization, which can be used to bypass the blocking in China by making it look like a protocol that is allowed.
 
 Shadowsocks remains our protocol of choice because it's simple, well understood and very performant. Furthermore, it has an enthusiastic community of very smart people behind it.

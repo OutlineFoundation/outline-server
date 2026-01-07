@@ -34,7 +34,7 @@ const VALID_USER_REPORT2: HourlyUserConnectionMetricsReport = {
 
 /*
  * Legacy access key user reports to ensure backwards compatibility with servers not
- * synced past https://github.com/Jigsaw-Code/outline-server/pull/1529).
+ * synced past https://github.com/OutlineFoundation/outline-server/pull/1529).
  */
 const LEGACY_PER_KEY_USER_REPORT: HourlyUserConnectionMetricsReport = {
   userId: 'foo',
@@ -43,7 +43,7 @@ const LEGACY_PER_KEY_USER_REPORT: HourlyUserConnectionMetricsReport = {
 
 /*
  * Legacy multiple countries user reports to ensure backwards compatibility with servers
- * not synced past https://github.com/Jigsaw-Code/outline-server/pull/1242.
+ * not synced past https://github.com/OutlineFoundation/outline-server/pull/1242.
  */
 const LEGACY_PER_LOCATION_USER_REPORT: HourlyUserConnectionMetricsReport = {
   userId: 'foobar',
