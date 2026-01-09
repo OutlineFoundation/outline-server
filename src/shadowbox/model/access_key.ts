@@ -14,6 +14,9 @@
 
 export type AccessKeyId = string;
 
+// Listener types that an access key can use
+export type ListenerType = 'tcp' | 'udp' | 'websocket-stream' | 'websocket-packet';
+
 // Parameters needed to access a Shadowsocks proxy.
 export interface ProxyParams {
   // Hostname of the proxy
@@ -43,6 +46,8 @@ export interface AccessKey {
   readonly reachedDataLimit: boolean;
   // The key's current data limit.  If it exists, it overrides the server default data limit.
   readonly dataLimit?: DataLimit;
+  // Listeners enabled for this access key
+  readonly listeners?: ListenerType[];
 }
 
 export interface AccessKeyCreateParams {
@@ -58,6 +63,8 @@ export interface AccessKeyCreateParams {
   readonly dataLimit?: DataLimit;
   // The port number to use for the access key.
   readonly portNumber?: number;
+  // Listeners to enable for this access key.
+  readonly listeners?: ListenerType[];
 }
 
 export interface AccessKeyRepository {
