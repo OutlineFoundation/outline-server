@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: outline-server
+    env: node
+    buildCommand: npm install
+    startCommand: npm run start
+    port: 10000
+    envVars:
+      - key: NODE_VERSION
+        value: 18.20.8
