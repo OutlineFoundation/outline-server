@@ -262,11 +262,20 @@ function generate_certificate() {
   local -r CERTIFICATE_NAME="${STATE_DIR}/shadowbox-selfsigned"
   readonly SB_CERTIFICATE_FILE="${CERTIFICATE_NAME}.crt"
   readonly SB_PRIVATE_KEY_FILE="${CERTIFICATE_NAME}.key"
+  local SAN_FIELD_PREFIX=""
+  if [[ ${PUBLIC_HOSTNAME} =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    SAN_FIELD_PREFIX="IP"
+  else
+    SAN_FIELD_PREFIX="DNS"
+  fi
+
   declare -a openssl_req_flags=(
     -x509 -nodes -days 36500 -newkey rsa:4096
     -subj "/CN=${PUBLIC_HOSTNAME}"
+    -addext "subjectAltName=${SAN_FIELD_PREFIX}:${PUBLIC_HOSTNAME}"
     -keyout "${SB_PRIVATE_KEY_FILE}" -out "${SB_CERTIFICATE_FILE}"
   )
+
   openssl req "${openssl_req_flags[@]}" >&2
 }
 
