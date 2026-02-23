@@ -31,6 +31,7 @@ import * as version from './version';
 import {PrometheusManagerMetrics} from './manager_metrics';
 import {bindService, ShadowsocksManagerService} from './manager_service';
 import {OutlineShadowsocksServer} from './outline_shadowsocks_server';
+import {OutlineCaddyServer} from './outline_caddy_server';
 import {AccessKeyConfigJson, ServerAccessKeyRepository} from './server_access_key';
 import * as server_config from './server_config';
 import {
@@ -162,6 +163,26 @@ async function main() {
   if (fs.existsSync(MMDB_LOCATION_ASN)) {
     shadowsocksServer.configureAsnMetrics(MMDB_LOCATION_ASN);
   }
+  const caddyServer = new OutlineCaddyServer(
+    getBinaryFilename('outline-caddy'),
+    getPersistentFilename('outline-caddy/config.yaml'),
+    verbose
+  );
+
+  // Configure listener defaults (e.g., WebSocket paths/ports) based on server configuration.
+  const listenersConfig = serverConfig.data().listeners;
+  shadowsocksServer.configureListeners(
+    listenersConfig
+      ? {
+          websocketStream: listenersConfig.websocketStream
+            ? {...listenersConfig.websocketStream}
+            : undefined,
+          websocketPacket: listenersConfig.websocketPacket
+            ? {...listenersConfig.websocketPacket}
+            : undefined,
+        }
+      : undefined
+  );
 
   const isReplayProtectionEnabled = createRolloutTracker(serverConfig).isRolloutEnabled(
     'replay-protection',
@@ -212,6 +233,21 @@ async function main() {
     serverConfig.data().accessKeyDataLimit
   );
 
+  // Determine if API should be proxied through Caddy
+  const apiProxyEnabled = !!serverConfig.data().caddyWebServer?.apiProxyPath;
+
+  try {
+    await caddyServer.applyConfig({
+      accessKeys: accessKeyRepository.listAccessKeys(),
+      listeners: serverConfig.data().listeners,
+      caddyConfig: serverConfig.data().caddyWebServer,
+      hostname: serverConfig.data().hostname,
+      apiPort: apiProxyEnabled ? apiPortNumber : undefined,
+    });
+  } catch (error) {
+    logging.error(`Failed to apply initial Caddy configuration: ${error}`);
+  }
+
   const metricsReader = new PrometheusUsageMetrics(prometheusClient);
   const managerMetrics = new PrometheusManagerMetrics(prometheusClient);
   const metricsCollector = new RestMetricsCollectorClient(metricsCollectorUrl);
@@ -228,11 +264,15 @@ async function main() {
     accessKeyRepository,
     shadowsocksServer,
     managerMetrics,
-    metricsPublisher
+    metricsPublisher,
+    caddyServer
   );
 
   const certificateFilename = process.env.SB_CERTIFICATE_FILE;
   const privateKeyFilename = process.env.SB_PRIVATE_KEY_FILE;
+
+  // Create API server with HTTPS (self-signed cert)
+  // When apiProxyPath is set, Caddy also proxies to this with TLS verification disabled
   const apiServer = restify.createServer({
     certificate: fs.readFileSync(certificateFilename),
     key: fs.readFileSync(privateKeyFilename),
@@ -255,6 +295,7 @@ async function main() {
   apiServer.use(cors.actual);
   bindService(apiServer, apiPrefix, managerService);
 
+  // Listen on all interfaces
   apiServer.listen(apiPortNumber, () => {
     logging.info(`Manager listening at ${apiServer.url}${apiPrefix}`);
   });

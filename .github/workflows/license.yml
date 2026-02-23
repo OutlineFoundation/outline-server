@@ -15,7 +15,7 @@
 name: License checks
 
 concurrency:
-  group: ${{ github.head_ref || github.ref }}
+  group: license-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 on:

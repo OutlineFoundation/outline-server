@@ -99,6 +99,68 @@ paths:
         '409':
           description: The requested port was already in use by another service.
 
+  /server/listeners:
+    put:
+      description: |
+        Sets the listeners configuration for access keys.
+        - By default, only affects newly created keys
+        - Set `applyToExisting: true` to also update all existing keys
+        
+        Use PUT /access-keys/{id}/listeners for per-key overrides.
+      tags:
+        - Server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ListenersConfig"
+                - type: object
+                  properties:
+                    applyToExisting:
+                      type: boolean
+                      default: false
+                      description: If true, also update all existing access keys
+            examples:
+              'Defaults only':
+                value: '{"tcp": {"port": 443}, "udp": {"port": 443}}'
+              'With WebSocket':
+                value: '{"tcp": {"port": 443}, "websocketStream": {"path": "/tcp", "webServerPort": 8080}, "websocketPacket": {"path": "/udp", "webServerPort": 8080}}'
+              'Update all existing keys':
+                value: '{"tcp": {"port": 443}, "websocketStream": {"path": "/tcp"}, "applyToExisting": true}'
+      responses:
+        '204':
+          description: The listeners configuration was successfully updated.
+        '400':
+          description: Invalid listeners configuration.
+        '409':
+          description: One or more requested ports were already in use by another service.
+
+  /server/web-server:
+    put:
+      description: Configures the Caddy web server for automatic HTTPS and WebSocket reverse proxy.
+      tags:
+        - Server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebServerConfig"
+            examples:
+              'Enable with auto HTTPS':
+                value: '{"enabled": true, "autoHttps": true, "email": "admin@example.com", "domain": "example.com"}'
+              'Basic configuration':
+                value: '{"enabled": true, "domain": "example.com"}'
+      responses:
+        '204':
+          description: The web server configuration was successfully updated.
+        '400':
+          description: Invalid web server configuration.
+        '500':
+          description: Failed to configure the embedded Caddy web server.
+
   /server/access-key-data-limit:
     put:
       description: Sets a data transfer limit for all access keys
@@ -278,11 +340,18 @@ paths:
                   type: integer
                 limit:
                   $ref: "#/components/schemas/DataLimit"
+                listeners:
+                  type: array
+                  items:
+                    type: string
+                    enum: ['tcp', 'udp', 'websocket-stream', 'websocket-packet']
             examples:
               'No params specified':
                 value: '{"method":"aes-192-gcm"}'
               'Provide params':
                 value: '{"method":"aes-192-gcm","name":"First","password":"8iu8V8EeoFVpwQvQeS9wiD","port": 12345,"limit":{"bytes":10000}}'
+              'With listeners':
+                value: '{"name":"WSS User","listeners":["tcp","udp","websocket-stream","websocket-packet"]}'
       responses:
         '201':
           description: The newly created access key
@@ -364,7 +433,7 @@ paths:
                   value: >-
                     {"id":"my-identifier","name":"First","password":"XxXxXx","port":9795,"method":"chacha20-ietf-poly1305","accessUrl":"ss://SADFJSKADFJAKSD@0.0.0.0:9795/?outline=1"}
     get:
-      description: Get an access key
+      description: Get an access key (always returns JSON)
       tags:
         - Access Key
       parameters:
@@ -382,8 +451,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/AccessKey"
               examples:
-                '0':
+                'Traditional key':
                   value: '{"id":"0","name":"Admin","password":"XxXxXx","port":18162,"method":"chacha20-ietf-poly1305","accessUrl":"ss://SADFJSKADFJAKSD@0.0.0.0:18162/?outline=1"}'
+                'WebSocket key':
+                  value: '{"id":"1","name":"WSS User","listeners":["websocket-stream","websocket-packet"],"dynamicConfig":{"transport":{"$type":"tcpudp"}}}'
         '404':
           description: Access key inexistent
           content:
@@ -458,6 +529,91 @@ paths:
           description: Access key renamed successfully
         '404':
           description: Access key inexistent
+  /access-keys/{id}/listeners:
+    put:
+      description: |
+        Updates the listeners for a specific access key.
+        This overrides the global /server/listeners setting for this key.
+      tags:
+        - Access Key
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The id of the access key
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - listeners
+              properties:
+                listeners:
+                  type: array
+                  items:
+                    type: string
+                    enum: ['tcp', 'udp', 'websocket-stream', 'websocket-packet']
+            examples:
+              'All transports':
+                value: '{"listeners": ["tcp", "udp", "websocket-stream", "websocket-packet"]}'
+              'WebSocket only':
+                value: '{"listeners": ["websocket-stream", "websocket-packet"]}'
+              'Traditional only':
+                value: '{"listeners": ["tcp", "udp"]}'
+      responses:
+        '204':
+          description: Listeners updated successfully
+        '400':
+          description: Invalid listeners configuration
+        '404':
+          description: Access key not found
+  /access-keys/{id}/dynamic-config:
+    get:
+      description: |
+        Returns the dynamic transport configuration for WebSocket-enabled keys.
+        Returns YAML content compatible with Outline Client v1.15.0+.
+        Returns 404 if the key has no WebSocket listeners.
+      tags:
+        - Access Key
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The id of the access key
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dynamic transport configuration in YAML format
+          content:
+            text/yaml:
+              schema:
+                type: string
+              examples:
+                'WebSocket config':
+                  value: |
+                    transport:
+                      $type: tcpudp
+                      tcp:
+                        $type: shadowsocks
+                        endpoint:
+                          $type: websocket
+                          url: wss://example.com/tcp
+                        cipher: chacha20-ietf-poly1305
+                        secret: XxXxXx
+                      udp:
+                        $type: shadowsocks
+                        endpoint:
+                          $type: websocket
+                          url: wss://example.com/udp
+                        cipher: chacha20-ietf-poly1305
+                        secret: XxXxXx
+        '404':
+          description: Access key not found or has no WebSocket listeners
   /access-keys/{id}/data-limit:
     put:
       description: Sets a data limit for the given access key
@@ -617,19 +773,100 @@ components:
           type: integer
           minimum: 0
 
+    ListenerConfig:
+      properties:
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: Port number for the listener
+        path:
+          type: string
+          description: Path for WebSocket listeners (e.g., "/tcp" or "/udp")
+        webServerPort:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: Port for the internal WebSocket server (must be shared by both WebSocket listeners)
+    
+    ListenersConfig:
+      properties:
+        tcp:
+          $ref: "#/components/schemas/ListenerConfig"
+          description: TCP listener configuration
+        udp:
+          $ref: "#/components/schemas/ListenerConfig"
+          description: UDP listener configuration
+        websocketStream:
+          $ref: "#/components/schemas/ListenerConfig"
+          description: WebSocket stream (TCP) listener configuration
+        websocketPacket:
+          $ref: "#/components/schemas/ListenerConfig"
+          description: WebSocket packet (UDP) listener configuration
+    
+    WebServerConfig:
+      properties:
+        enabled:
+          type: boolean
+          description: Whether Caddy web server integration is enabled
+        autoHttps:
+          type: boolean
+          description: Whether to enable automatic HTTPS via ACME
+        email:
+          type: string
+          description: Email address for ACME registration
+        domain:
+          type: string
+          description: Domain name for automatic HTTPS
+        apiProxyPath:
+          type: string
+          description: Path prefix for API reverse proxy (e.g., "/api"). When set, Caddy will proxy API requests with valid TLS.
+
     AccessKey:
       required:
         - id
       properties:
         id:
           type: string
+          description: Unique identifier for this access key.
         name:
           type: string
+          description: User-assigned name for this access key.
         password:
           type: string
+          description: |
+            Shadowsocks password. Only present when the key has TCP or UDP listeners.
+            For WebSocket-only keys, the secret is in dynamicConfig.
         port:
           type: integer
+          description: |
+            Port number for direct Shadowsocks connections. Only present when the 
+            key has TCP or UDP listeners.
         method:
           type: string
+          description: |
+            Encryption method (cipher). Only present when the key has TCP or UDP listeners.
+            For WebSocket-only keys, the cipher is in dynamicConfig.
+        dataLimit:
+          $ref: "#/components/schemas/DataLimit"
+          description: Optional data transfer limit for this key.
         accessUrl:
           type: string
+          description: |
+            SIP002-formatted ss:// URL for direct Shadowsocks connections.
+            Only present when the key has TCP or UDP listeners enabled.
+            For WebSocket-only keys, use dynamicConfig instead.
+        listeners:
+          type: array
+          items:
+            type: string
+            enum: ['tcp', 'udp', 'websocket-stream', 'websocket-packet']
+          description: List of enabled listener types for this key.
+        dynamicConfig:
+          type: object
+          description: |
+            Dynamic access configuration for WebSocket transport (Outline Client v1.15.0+).
+            Only present when the key has websocket-stream or websocket-packet listeners.
+            Contains the complete transport configuration including cipher and secret.
+          additionalProperties: true
+

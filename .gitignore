@@ -9,3 +9,4 @@
 macos-signing-certificate.p12
 node_modules/
 third_party/shellcheck/download/
+CLAUDE.md

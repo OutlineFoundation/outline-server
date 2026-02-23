@@ -20,7 +20,20 @@ export interface ShadowsocksAccessKey {
   secret: string;
 }
 
+export interface ListenerSettings {
+  websocketStream?: {
+    path?: string;
+    webServerPort?: number;
+  };
+  websocketPacket?: {
+    path?: string;
+    webServerPort?: number;
+  };
+}
+
 export interface ShadowsocksServer {
   // Updates the server to accept only the given access keys.
   update(keys: ShadowsocksAccessKey[]): Promise<void>;
+  // Optionally updates listener-specific configuration such as WebSocket paths or ports.
+  configureListeners?(listeners: ListenerSettings | undefined): void;
 }
