@@ -81,6 +81,32 @@ jobs:
           files: |
             src/shadowbox/server/api.yml
 
+  shadowbox-arm64:
+    name: Shadowbox (arm64)
+    runs-on: ubuntu-22.04-arm
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+
+      - name: Install Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Shadowbox Debug Build (arm64)
+        run: TARGET_ARCH=aarch64 ./task shadowbox:build
+
+      - name: Shadowbox Unit Test
+        run: ./task shadowbox:test
+
+      - name: Shadowbox Docker Build (arm64)
+        run: TARGET_ARCH=aarch64 ./task shadowbox:docker:build
+
   manual-install-script:
     name: Manual Install Script
     runs-on: ubuntu-latest

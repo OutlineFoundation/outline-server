@@ -100,10 +100,13 @@ function setup() {
   "${DOCKER}" run -d --rm -p "10080:80" --network="${NET_OPEN}" --network-alias="target" --name="${TARGET_CONTAINER}" "${TARGET_IMAGE}"
 
   # Shadowsocks service.
+  # Start on NET_OPEN first so that -p host port binding works on macOS Docker Desktop
+  # (Docker Desktop does not publish ports when the initial network is --internal).
+  # Then connect to NET_BLOCKED so the security isolation tests still pass.
   declare -ar shadowbox_flags=(
     -d
     --rm
-    --network="${NET_BLOCKED}"
+    --network="${NET_OPEN}"
     --network-alias="shadowbox"
     -p "20443:443"
     -e "SB_API_PORT=443"
@@ -118,8 +121,7 @@ function setup() {
     "${SHADOWBOX_IMAGE}"
   )
   "${DOCKER}" run "${shadowbox_flags[@]}"
-  # "${DOCKER}" network connect --alias shadowbox "${NET_BLOCKED}" "${SHADOWBOX_CONTAINER}"
-  "${DOCKER}" network connect "${NET_OPEN}" "${SHADOWBOX_CONTAINER}"
+  "${DOCKER}" network connect --alias shadowbox "${NET_BLOCKED}" "${SHADOWBOX_CONTAINER}"
 
   # Client service.
   "${DOCKER}" build --force-rm -t "${CLIENT_IMAGE}" "$(dirname "$0")/client"
