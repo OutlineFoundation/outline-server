@@ -25,6 +25,7 @@ import {AccessKeyConfigJson, ServerAccessKeyRepository} from './server_access_ke
 import {ServerConfigJson} from './server_config';
 import {SharedMetricsPublisher} from './shared_metrics';
 import {ShadowsocksServer} from '../model/shadowsocks_server';
+import type {OutlineCaddyConfigPayload, OutlineCaddyController} from './outline_caddy_server';
 
 interface ServerInfo {
   name: string;
@@ -34,6 +35,18 @@ interface ServerInfo {
 const NEW_PORT = 12345;
 const OLD_PORT = 54321;
 const EXPECTED_ACCESS_KEY_PROPERTIES = [
+  'id',
+  'name',
+  'password',
+  'port',
+  'method',
+  'accessUrl',
+  'dataLimit',
+  'listeners',
+].sort();
+
+// Keys created directly via repo don't have listeners set
+const EXPECTED_ACCESS_KEY_PROPERTIES_WITHOUT_LISTENERS = [
   'id',
   'name',
   'password',
@@ -58,7 +71,7 @@ describe('ShadowsocksManagerService', () => {
   });
 
   describe('getServer', () => {
-    it('Return default name if name is absent', (done) => {
+    it('Return default name if name is absent', () => {
       const repo = getAccessKeyRepository();
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
@@ -74,10 +87,10 @@ describe('ShadowsocksManagerService', () => {
             responseProcessed = true;
           },
         },
-        done
+        () => {}
       );
     });
-    it('Returns persisted properties', (done) => {
+    it('Returns persisted properties', () => {
       const repo = getAccessKeyRepository();
       const defaultDataLimit = {bytes: 999};
       const serverConfig = new InMemoryConfig({
@@ -98,13 +111,13 @@ describe('ShadowsocksManagerService', () => {
             responseProcessed = true;
           },
         },
-        done
+        () => {}
       );
     });
   });
 
   describe('renameServer', () => {
-    it('Rename changes the server name', (done) => {
+    it('Rename changes the server name', () => {
       const repo = getAccessKeyRepository();
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
@@ -120,13 +133,13 @@ describe('ShadowsocksManagerService', () => {
             responseProcessed = true;
           },
         },
-        done
+        () => {}
       );
     });
   });
 
   describe('setHostnameForAccessKeys', () => {
-    it(`accepts valid hostnames`, (done) => {
+    it(`accepts valid hostnames`, async () => {
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
         .serverConfig(serverConfig)
@@ -151,13 +164,12 @@ describe('ShadowsocksManagerService', () => {
         '2606:2800:220:1:248:1893:25c8:1946',
       ];
       for (const hostname of goodHostnames) {
-        service.setHostnameForAccessKeys({params: {hostname}}, res, () => {});
+        await service.setHostnameForAccessKeys({params: {hostname}}, res, () => {});
       }
 
       responseProcessed = true;
-      done();
     });
-    it(`rejects invalid hostnames`, (done) => {
+    it(`rejects invalid hostnames`, async () => {
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
         .serverConfig(serverConfig)
@@ -179,13 +191,12 @@ describe('ShadowsocksManagerService', () => {
         'gggg:ggg:220:1:248:1893:25c8:1946',
       ];
       for (const hostname of badHostnames) {
-        service.setHostnameForAccessKeys({params: {hostname}}, res, next);
+        await service.setHostnameForAccessKeys({params: {hostname}}, res, next);
       }
 
       responseProcessed = true;
-      done();
     });
-    it("Changes the server's hostname", (done) => {
+    it("Changes the server's hostname", async () => {
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
         .serverConfig(serverConfig)
@@ -199,9 +210,9 @@ describe('ShadowsocksManagerService', () => {
           responseProcessed = true;
         },
       };
-      service.setHostnameForAccessKeys({params: {hostname}}, res, done);
+      await service.setHostnameForAccessKeys({params: {hostname}}, res, () => {});
     });
-    it('Rejects missing hostname', (done) => {
+    it('Rejects missing hostname', async () => {
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
         .serverConfig(serverConfig)
@@ -211,12 +222,11 @@ describe('ShadowsocksManagerService', () => {
       const next = (error) => {
         expect(error.statusCode).toEqual(400);
         responseProcessed = true;
-        done();
       };
       const missingHostname = {params: {}} as {params: {hostname: string}};
-      service.setHostnameForAccessKeys(missingHostname, res, next);
+      await service.setHostnameForAccessKeys(missingHostname, res, next);
     });
-    it('Rejects non-string hostname', (done) => {
+    it('Rejects non-string hostname', async () => {
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
         .serverConfig(serverConfig)
@@ -226,16 +236,15 @@ describe('ShadowsocksManagerService', () => {
       const next = (error) => {
         expect(error.statusCode).toEqual(400);
         responseProcessed = true;
-        done();
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const badHostname = {params: {hostname: 123}} as any as {params: {hostname: string}};
-      service.setHostnameForAccessKeys(badHostname, res, next);
+      await service.setHostnameForAccessKeys(badHostname, res, next);
     });
   });
 
   describe('getAccessKey', () => {
-    it('Returns an access key', async (done) => {
+    it('Returns an access key', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       const key1 = await createNewAccessKeyWithName(repo, 'keyName1');
@@ -248,23 +257,22 @@ describe('ShadowsocksManagerService', () => {
             responseProcessed = true;
           },
         },
-        done
+        () => {}
       );
     });
 
-    it('Returns 404 if the access key does not exist', (done) => {
+    it('Returns 404 if the access key does not exist', () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       service.getAccessKey({params: {id: '1'}}, {send: () => {}}, (error) => {
         expect(error.statusCode).toEqual(404);
         responseProcessed = true;
-        done();
       });
     });
   });
 
   describe('listAccessKeys', () => {
-    it('lists access keys in order', async (done) => {
+    it('lists access keys in order', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       // Create 2 access keys with names.
@@ -282,9 +290,9 @@ describe('ShadowsocksManagerService', () => {
           responseProcessed = true; // required for afterEach to pass.
         },
       };
-      service.listAccessKeys({params: {}}, res, done);
+      service.listAccessKeys({params: {}}, res, () => {});
     });
-    it('lists access keys with expected properties', async (done) => {
+    it('lists access keys with expected properties', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       const accessKey = await repo.createNewAccessKey();
@@ -297,13 +305,17 @@ describe('ShadowsocksManagerService', () => {
           expect(data.accessKeys.length).toEqual(2);
           const serviceAccessKey1 = data.accessKeys[0];
           const serviceAccessKey2 = data.accessKeys[1];
-          expect(Object.keys(serviceAccessKey1).sort()).toEqual(EXPECTED_ACCESS_KEY_PROPERTIES);
-          expect(Object.keys(serviceAccessKey2).sort()).toEqual(EXPECTED_ACCESS_KEY_PROPERTIES);
+          expect(Object.keys(serviceAccessKey1).sort()).toEqual(
+            EXPECTED_ACCESS_KEY_PROPERTIES_WITHOUT_LISTENERS
+          );
+          expect(Object.keys(serviceAccessKey2).sort()).toEqual(
+            EXPECTED_ACCESS_KEY_PROPERTIES_WITHOUT_LISTENERS
+          );
           expect(serviceAccessKey1.name).toEqual(accessKeyName);
           responseProcessed = true; // required for afterEach to pass.
         },
       };
-      service.listAccessKeys({params: {}}, res, done);
+      service.listAccessKeys({params: {}}, res, () => {});
     });
   });
 
@@ -318,7 +330,7 @@ describe('ShadowsocksManagerService', () => {
 
     describe('handling the access key identifier', () => {
       describe("with 'createNewAccessKey'", () => {
-        it('generates a unique ID', (done) => {
+        it('generates a unique ID', async () => {
           const res = {
             send: (httpCode, data) => {
               expect(httpCode).toEqual(201);
@@ -326,45 +338,41 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          service.createNewAccessKey({params: {}}, res, done);
+          await service.createNewAccessKey({params: {}}, res, () => {});
         });
-        it('rejects requests with ID parameter set', (done) => {
+        it('rejects requests with ID parameter set', () => {
           const res = {send: (_httpCode, _data) => {}};
           service.createNewAccessKey({params: {id: 'foobar'}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
       });
 
       describe("with 'createAccessKey'", () => {
-        it('rejects requests without ID parameter set', (done) => {
+        it('rejects requests without ID parameter set', () => {
           const res = {send: (_httpCode, _data) => {}};
           service.createAccessKey({params: {}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
-        it('rejects non-string ID', (done) => {
+        it('rejects non-string ID', () => {
           const res = {send: (_httpCode, _data) => {}};
           service.createAccessKey({params: {id: Number('9876')}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
-        it('rejects if key exists', async (done) => {
+        it('rejects if key exists', async () => {
           const accessKey = await repo.createNewAccessKey();
           const res = {send: (_httpCode, _data) => {}};
-          service.createAccessKey({params: {id: accessKey.id}}, res, (error) => {
+          await service.createAccessKey({params: {id: accessKey.id}}, res, (error) => {
             expect(error.statusCode).toEqual(409);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
-        it('creates key with provided ID', (done) => {
+        it('creates key with provided ID', async () => {
           const res = {
             send: (httpCode, data) => {
               expect(httpCode).toEqual(201);
@@ -372,7 +380,7 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          service.createAccessKey({params: {id: 'myKeyId'}}, res, done);
+          await service.createAccessKey({params: {id: 'myKeyId'}}, res, () => {});
         });
       });
     });
@@ -390,7 +398,7 @@ describe('ShadowsocksManagerService', () => {
           serviceMethod = service[methodName].bind(service);
         });
 
-        it('verify default method', (done) => {
+        it('verify default method', async () => {
           // Verify that response returns a key with the expected properties.
           const res = {
             send: (httpCode, data) => {
@@ -400,9 +408,9 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          serviceMethod({params: {id: accessKeyId}}, res, done);
+          await serviceMethod({params: {id: accessKeyId}}, res, () => {});
         });
-        it('non-default method gets set', (done) => {
+        it('non-default method gets set', async () => {
           // Verify that response returns a key with the expected properties.
           const res = {
             send: (httpCode, data) => {
@@ -412,9 +420,9 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          serviceMethod({params: {id: accessKeyId, method: 'aes-256-gcm'}}, res, done);
+          await serviceMethod({params: {id: accessKeyId, method: 'aes-256-gcm'}}, res, () => {});
         });
-        it('use default name is params is not defined', (done) => {
+        it('use default name is params is not defined', async () => {
           const res = {
             send: (httpCode, data) => {
               expect(httpCode).toEqual(201);
@@ -422,17 +430,16 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          serviceMethod({params: {id: accessKeyId}}, res, done);
+          await serviceMethod({params: {id: accessKeyId}}, res, () => {});
         });
-        it('rejects non-string name', (done) => {
+        it('rejects non-string name', async () => {
           const res = {send: (_httpCode, _data) => {}};
-          serviceMethod({params: {id: accessKeyId, name: Number('9876')}}, res, (error) => {
+          await serviceMethod({params: {id: accessKeyId, name: Number('9876')}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
-        it('defined name is equal to stored', (done) => {
+        it('defined name is equal to stored', async () => {
           const ACCESSKEY_NAME = 'accesskeyname';
           const res = {
             send: (httpCode, data) => {
@@ -441,9 +448,9 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          serviceMethod({params: {id: accessKeyId, name: ACCESSKEY_NAME}}, res, done);
+          await serviceMethod({params: {id: accessKeyId, name: ACCESSKEY_NAME}}, res, () => {});
         });
-        it('limit can be undefined', (done) => {
+        it('limit can be undefined', async () => {
           const res = {
             send: (httpCode, data) => {
               expect(httpCode).toEqual(201);
@@ -451,19 +458,18 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          serviceMethod({params: {id: accessKeyId}}, res, done);
+          await serviceMethod({params: {id: accessKeyId}}, res, () => {});
         });
-        it('rejects non-numeric limits', (done) => {
+        it('rejects non-numeric limits', async () => {
           const ACCESSKEY_LIMIT = {bytes: '9876'};
 
           const res = {send: (_httpCode, _data) => {}};
-          serviceMethod({params: {id: accessKeyId, limit: ACCESSKEY_LIMIT}}, res, (error) => {
+          await serviceMethod({params: {id: accessKeyId, limit: ACCESSKEY_LIMIT}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
-        it('defined limit is equal to stored', (done) => {
+        it('defined limit is equal to stored', async () => {
           const ACCESSKEY_LIMIT = {bytes: 9876};
           const res = {
             send: (httpCode, data) => {
@@ -472,35 +478,32 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          serviceMethod({params: {id: accessKeyId, limit: ACCESSKEY_LIMIT}}, res, done);
+          await serviceMethod({params: {id: accessKeyId, limit: ACCESSKEY_LIMIT}}, res, () => {});
         });
-        it('method must be of type string', (done) => {
+        it('method must be of type string', async () => {
           const res = {send: (_httpCode, _data) => {}};
-          serviceMethod({params: {id: accessKeyId, method: Number('9876')}}, res, (error) => {
+          await serviceMethod({params: {id: accessKeyId, method: Number('9876')}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
-        it('method must be valid', (done) => {
+        it('method must be valid', async () => {
           const res = {send: (_httpCode, _data) => {}};
-          serviceMethod({params: {id: accessKeyId, method: 'abcdef'}}, res, (error) => {
+          await serviceMethod({params: {id: accessKeyId, method: 'abcdef'}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
-        it('Create returns a 500 when the repository throws an exception', (done) => {
+        it('Create returns a 500 when the repository throws an exception', async () => {
           spyOn(repo, 'createNewAccessKey').and.throwError('cannot write to disk');
           const res = {send: (_httpCode, _data) => {}};
-          serviceMethod({params: {id: accessKeyId, method: 'aes-192-gcm'}}, res, (error) => {
+          await serviceMethod({params: {id: accessKeyId, method: 'aes-192-gcm'}}, res, (error) => {
             expect(error.statusCode).toEqual(500);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
 
-        it('generates a new password when no password is provided', async (done) => {
+        it('generates a new password when no password is provided', async () => {
           const res = {
             send: (httpCode, data) => {
               expect(httpCode).toEqual(201);
@@ -508,10 +511,10 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          await serviceMethod({params: {id: accessKeyId}}, res, done);
+          await serviceMethod({params: {id: accessKeyId}}, res, () => {});
         });
 
-        it('uses the provided password when one is provided', async (done) => {
+        it('uses the provided password when one is provided', async () => {
           const PASSWORD = '8iu8V8EeoFVpwQvQeS9wiD';
           const res = {
             send: (httpCode, data) => {
@@ -520,29 +523,27 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          await serviceMethod({params: {id: accessKeyId, password: PASSWORD}}, res, done);
+          await serviceMethod({params: {id: accessKeyId, password: PASSWORD}}, res, () => {});
         });
 
-        it('rejects a password that is not a string', async (done) => {
+        it('rejects a password that is not a string', async () => {
           const PASSWORD = Number.MAX_SAFE_INTEGER;
           const res = {send: SEND_NOTHING};
           await serviceMethod({params: {id: accessKeyId, password: PASSWORD}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
-        it('rejects a password that is already in use', async (done) => {
+        it('rejects a password that is already in use', async () => {
           const PASSWORD = 'foobar';
           await repo.createNewAccessKey({password: PASSWORD});
           const res = {send: SEND_NOTHING};
           await serviceMethod({params: {id: accessKeyId, password: PASSWORD}}, res, (error) => {
             expect(error.statusCode).toEqual(409);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
-        it('uses the default port for new keys when no port is provided', async (done) => {
+        it('uses the default port for new keys when no port is provided', async () => {
           const res = {
             send: (httpCode, data) => {
               expect(httpCode).toEqual(201);
@@ -550,10 +551,10 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          await serviceMethod({params: {id: accessKeyId}}, res, done);
+          await serviceMethod({params: {id: accessKeyId}}, res, () => {});
         });
 
-        it('uses the provided port when one is provided', async (done) => {
+        it('uses the provided port when one is provided', async () => {
           const res = {
             send: (httpCode, data) => {
               expect(httpCode).toEqual(201);
@@ -561,36 +562,36 @@ describe('ShadowsocksManagerService', () => {
               responseProcessed = true; // required for afterEach to pass.
             },
           };
-          await serviceMethod({params: {id: accessKeyId, port: NEW_PORT}}, res, done);
+          await serviceMethod({params: {id: accessKeyId, port: NEW_PORT}}, res, () => {});
         });
 
-        it('rejects ports that are not numbers', async (done) => {
+        it('rejects ports that are not numbers', async () => {
           const res = {send: SEND_NOTHING};
           await serviceMethod({params: {id: accessKeyId, port: '1234'}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
 
-        it('rejects invalid port numbers', async (done) => {
+        it('rejects invalid port numbers', async () => {
           const res = {send: SEND_NOTHING};
           await serviceMethod({params: {id: accessKeyId, port: 1.4}}, res, (error) => {
             expect(error.statusCode).toEqual(400);
             responseProcessed = true; // required for afterEach to pass.
-            done();
           });
         });
 
-        it('rejects port numbers already in use', async (done) => {
+        it('rejects port numbers already in use', async () => {
           const server = new net.Server();
-          server.listen(NEW_PORT, async () => {
-            const res = {send: SEND_NOTHING};
-            await serviceMethod({params: {id: accessKeyId, port: NEW_PORT}}, res, (error) => {
-              expect(error.statusCode).toEqual(409);
-              responseProcessed = true; // required for afterEach to pass.
-              server.close();
-              done();
+          await new Promise<void>((resolve) => {
+            server.listen(NEW_PORT, async () => {
+              const res = {send: SEND_NOTHING};
+              await serviceMethod({params: {id: accessKeyId, port: NEW_PORT}}, res, (error) => {
+                expect(error.statusCode).toEqual(409);
+                responseProcessed = true; // required for afterEach to pass.
+                server.close();
+                resolve();
+              });
             });
           });
         });
@@ -598,7 +599,7 @@ describe('ShadowsocksManagerService', () => {
     }
   });
   describe('setPortForNewAccessKeys', () => {
-    it('changes ports for new access keys', async (done) => {
+    it('changes ports for new access keys', async () => {
       const repo = getAccessKeyRepository();
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
@@ -617,10 +618,9 @@ describe('ShadowsocksManagerService', () => {
       expect(newKey.proxyParams.portNumber).toEqual(NEW_PORT);
       expect(oldKey.proxyParams.portNumber).not.toEqual(NEW_PORT);
       responseProcessed = true;
-      done();
     });
 
-    it('changes the server config', async (done) => {
+    it('changes the server config', async () => {
       const repo = getAccessKeyRepository();
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
@@ -635,10 +635,10 @@ describe('ShadowsocksManagerService', () => {
           responseProcessed = true;
         },
       };
-      await service.setPortForNewAccessKeys({params: {port: NEW_PORT}}, res, done);
+      await service.setPortForNewAccessKeys({params: {port: NEW_PORT}}, res, () => {});
     });
 
-    it('rejects invalid port numbers', async (done) => {
+    it('rejects invalid port numbers', async () => {
       const repo = getAccessKeyRepository();
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
@@ -664,10 +664,9 @@ describe('ShadowsocksManagerService', () => {
       await service.setPortForNewAccessKeys({params: {port: 65536}}, res, next);
 
       responseProcessed = true;
-      done();
     });
 
-    it('rejects port numbers already in use', async (done) => {
+    it('rejects port numbers already in use', async () => {
       const repo = getAccessKeyRepository();
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
@@ -686,17 +685,19 @@ describe('ShadowsocksManagerService', () => {
         // Conflict
         expect(error.statusCode).toEqual(409);
         responseProcessed = true;
-        done();
       };
 
       const server = new net.Server();
-      server.listen(NEW_PORT, async () => {
-        await service.setPortForNewAccessKeys({params: {port: NEW_PORT}}, res, next);
-        server.close();
+      await new Promise<void>((resolve) => {
+        server.listen(NEW_PORT, async () => {
+          await service.setPortForNewAccessKeys({params: {port: NEW_PORT}}, res, next);
+          server.close();
+          resolve();
+        });
       });
     });
 
-    it('accepts port numbers already in use by access keys', async (done) => {
+    it('accepts port numbers already in use by access keys', async () => {
       const repo = getAccessKeyRepository();
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
@@ -714,14 +715,16 @@ describe('ShadowsocksManagerService', () => {
       };
 
       const firstKeyConnection = new net.Server();
-      firstKeyConnection.listen(OLD_PORT, async () => {
-        await service.setPortForNewAccessKeys({params: {port: OLD_PORT}}, res, () => {});
-        firstKeyConnection.close();
-        done();
+      await new Promise<void>((resolve) => {
+        firstKeyConnection.listen(OLD_PORT, async () => {
+          await service.setPortForNewAccessKeys({params: {port: OLD_PORT}}, res, () => {});
+          firstKeyConnection.close();
+          resolve();
+        });
       });
     });
 
-    it('rejects malformed requests', async (done) => {
+    it('rejects malformed requests', async () => {
       const repo = getAccessKeyRepository();
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const service = new ShadowsocksManagerServiceBuilder()
@@ -752,12 +755,125 @@ describe('ShadowsocksManagerService', () => {
       );
 
       responseProcessed = true;
-      done();
+    });
+  });
+
+  describe('setListeners', () => {
+    it('persists configuration and updates the Shadowsocks server', async () => {
+      const repo = getAccessKeyRepository();
+      const serverConfig = new InMemoryConfig({} as ServerConfigJson);
+      const fakeServer = new FakeShadowsocksServer();
+      const fakeCaddy = new FakeOutlineCaddyServer();
+      const service = new ShadowsocksManagerServiceBuilder()
+        .serverConfig(serverConfig)
+        .accessKeys(repo)
+        .shadowsocksServer(fakeServer)
+        .caddyServer(fakeCaddy)
+        .build();
+
+      const listeners = {
+        tcp: {port: 8443},
+        udp: {port: 9443},
+        websocketStream: {path: '/stream', webServerPort: 8080},
+        websocketPacket: {path: '/packet', webServerPort: 8080},
+      };
+
+      const res = {
+        send: (httpCode) => {
+          expect(httpCode).toEqual(204);
+          responseProcessed = true;
+        },
+      };
+
+      await service.setListeners({params: listeners}, res, () => {});
+
+      expect(serverConfig.data().listeners).toEqual(listeners);
+      expect(fakeServer.getListenerSettings()).toEqual({
+        websocketStream: listeners.websocketStream,
+        websocketPacket: listeners.websocketPacket,
+      });
+      expect(fakeCaddy.applyCalls.length).toEqual(1);
+      expect(fakeCaddy.applyCalls[0].listeners).toEqual(listeners);
+    });
+
+    it('clears WebSocket listener settings when they are removed', async () => {
+      const repo = getAccessKeyRepository();
+      const serverConfig = new InMemoryConfig({} as ServerConfigJson);
+      const fakeServer = new FakeShadowsocksServer();
+      const fakeCaddy = new FakeOutlineCaddyServer();
+      const service = new ShadowsocksManagerServiceBuilder()
+        .serverConfig(serverConfig)
+        .accessKeys(repo)
+        .shadowsocksServer(fakeServer)
+        .caddyServer(fakeCaddy)
+        .build();
+
+      const listenersWithWebsocket = {
+        tcp: {port: 8443},
+        udp: {port: 8443},
+        websocketStream: {path: '/tcp', webServerPort: 8080},
+        websocketPacket: {path: '/udp', webServerPort: 8080},
+      };
+      await service.setListeners({params: listenersWithWebsocket}, {send: () => {}}, () => {});
+      expect(fakeServer.getListenerSettings()).toEqual({
+        websocketStream: listenersWithWebsocket.websocketStream,
+        websocketPacket: listenersWithWebsocket.websocketPacket,
+      });
+
+      const listenersWithoutWebsocket = {
+        tcp: {port: 9090},
+        udp: {port: 9090},
+      };
+      const res = {
+        send: (httpCode) => {
+          expect(httpCode).toEqual(204);
+          responseProcessed = true;
+        },
+      };
+      await service.setListeners({params: listenersWithoutWebsocket}, res, () => {});
+
+      expect(serverConfig.data().listeners).toEqual(listenersWithoutWebsocket);
+      expect(fakeServer.getListenerSettings()).toBeUndefined();
+      expect(fakeCaddy.applyCalls.length).toEqual(2);
+      expect(fakeCaddy.applyCalls[1].listeners).toEqual(listenersWithoutWebsocket);
+    });
+  });
+
+  describe('configureCaddyWebServer', () => {
+    it('stores configuration and applies it', async () => {
+      const repo = getAccessKeyRepository();
+      const serverConfig = new InMemoryConfig({} as ServerConfigJson);
+      const fakeCaddy = new FakeOutlineCaddyServer();
+      const service = new ShadowsocksManagerServiceBuilder()
+        .serverConfig(serverConfig)
+        .accessKeys(repo)
+        .caddyServer(fakeCaddy)
+        .build();
+
+      const config = {
+        enabled: true,
+        autoHttps: true,
+        email: 'admin@example.com',
+        domain: 'example.com',
+      };
+
+      const res = {
+        send: (httpCode) => {
+          expect(httpCode).toEqual(204);
+          responseProcessed = true;
+        },
+      };
+
+      await service.configureCaddyWebServer({params: config}, res, () => {});
+
+      expect(serverConfig.data().caddyWebServer).toEqual(config);
+      expect(fakeCaddy.applyCalls.length).toEqual(1);
+      expect(fakeCaddy.applyCalls[0].caddyConfig).toEqual(config);
     });
   });
 
   describe('removeAccessKey', () => {
-    it('removes keys', async (done) => {
+    it('removes keys', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       const key1 = await repo.createNewAccessKey();
@@ -773,9 +889,9 @@ describe('ShadowsocksManagerService', () => {
         },
       };
       // remove the 1st key.
-      service.removeAccessKey({params: {id: key1.id}}, res, done);
+      await service.removeAccessKey({params: {id: key1.id}}, res, () => {});
     });
-    it('Remove returns a 500 when the repository throws an exception', async (done) => {
+    it('Remove returns a 500 when the repository throws an exception', async () => {
       const repo = getAccessKeyRepository();
       spyOn(repo, 'removeAccessKey').and.throwError('cannot write to disk');
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
@@ -784,13 +900,12 @@ describe('ShadowsocksManagerService', () => {
       service.removeAccessKey({params: {id: key.id}}, res, (error) => {
         expect(error.statusCode).toEqual(500);
         responseProcessed = true; // required for afterEach to pass.
-        done();
       });
     });
   });
 
   describe('renameAccessKey', () => {
-    it('renames keys', async (done) => {
+    it('renames keys', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       const OLD_NAME = 'oldName';
@@ -805,9 +920,9 @@ describe('ShadowsocksManagerService', () => {
           responseProcessed = true; // required for afterEach to pass.
         },
       };
-      service.renameAccessKey({params: {id: key.id, name: NEW_NAME}}, res, done);
+      service.renameAccessKey({params: {id: key.id, name: NEW_NAME}}, res, () => {});
     });
-    it('Rename returns a 400 when the access key id is not a string', async (done) => {
+    it('Rename returns a 400 when the access key id is not a string', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
 
@@ -816,10 +931,9 @@ describe('ShadowsocksManagerService', () => {
       service.renameAccessKey({params: {id: 123}}, res, (error) => {
         expect(error.statusCode).toEqual(400);
         responseProcessed = true; // required for afterEach to pass.
-        done();
       });
     });
-    it('Rename returns a 500 when the repository throws an exception', async (done) => {
+    it('Rename returns a 500 when the repository throws an exception', async () => {
       const repo = getAccessKeyRepository();
       spyOn(repo, 'renameAccessKey').and.throwError('cannot write to disk');
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
@@ -829,13 +943,12 @@ describe('ShadowsocksManagerService', () => {
       service.renameAccessKey({params: {id: key.id, name: 'newName'}}, res, (error) => {
         expect(error.statusCode).toEqual(500);
         responseProcessed = true; // required for afterEach to pass.
-        done();
       });
     });
   });
 
   describe('setAccessKeyDataLimit', () => {
-    it('sets access key data limit', async (done) => {
+    it('sets access key data limit', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       const key = await repo.createNewAccessKey();
@@ -845,13 +958,12 @@ describe('ShadowsocksManagerService', () => {
           expect(httpCode).toEqual(204);
           expect(key.dataLimit.bytes).toEqual(1000);
           responseProcessed = true;
-          done();
         },
       };
       service.setAccessKeyDataLimit({params: {id: key.id, limit}}, res, () => {});
     });
 
-    it('rejects negative numbers', async (done) => {
+    it('rejects negative numbers', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       const keyId = (await repo.createNewAccessKey()).id;
@@ -859,11 +971,10 @@ describe('ShadowsocksManagerService', () => {
       service.setAccessKeyDataLimit({params: {id: keyId, limit}}, {send: () => {}}, (error) => {
         expect(error.statusCode).toEqual(400);
         responseProcessed = true;
-        done();
       });
     });
 
-    it('rejects non-numeric limits', async (done) => {
+    it('rejects non-numeric limits', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       const keyId = (await repo.createNewAccessKey()).id;
@@ -871,11 +982,10 @@ describe('ShadowsocksManagerService', () => {
       service.setAccessKeyDataLimit({params: {id: keyId, limit}}, {send: () => {}}, (error) => {
         expect(error.statusCode).toEqual(400);
         responseProcessed = true;
-        done();
       });
     });
 
-    it('rejects an empty request', async (done) => {
+    it('rejects an empty request', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       const keyId = (await repo.createNewAccessKey()).id;
@@ -883,11 +993,10 @@ describe('ShadowsocksManagerService', () => {
       service.setAccessKeyDataLimit({params: {id: keyId, limit}}, {send: () => {}}, (error) => {
         expect(error.statusCode).toEqual(400);
         responseProcessed = true;
-        done();
       });
     });
 
-    it('rejects requests for nonexistent keys', async (done) => {
+    it('rejects requests for nonexistent keys', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       await repo.createNewAccessKey();
@@ -898,14 +1007,13 @@ describe('ShadowsocksManagerService', () => {
         (error) => {
           expect(error.statusCode).toEqual(404);
           responseProcessed = true;
-          done();
         }
       );
     });
   });
 
   describe('removeAccessKeyDataLimit', () => {
-    it('removes an access key data limit', async (done) => {
+    it('removes an access key data limit', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       const key = await repo.createNewAccessKey();
@@ -916,25 +1024,23 @@ describe('ShadowsocksManagerService', () => {
           expect(httpCode).toEqual(204);
           expect(key.dataLimit).toBeFalsy();
           responseProcessed = true;
-          done();
         },
       };
       service.removeAccessKeyDataLimit({params: {id: key.id}}, res, () => {});
     });
-    it('returns 404 for a nonexistent key', async (done) => {
+    it('returns 404 for a nonexistent key', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       await repo.createNewAccessKey();
       service.removeAccessKeyDataLimit({params: {id: 'not an id'}}, {send: () => {}}, (error) => {
         expect(error.statusCode).toEqual(404);
         responseProcessed = true;
-        done();
       });
     });
   });
 
   describe('setDefaultDataLimit', () => {
-    it('sets default data limit', async (done) => {
+    it('sets default data limit', async () => {
       const serverConfig = new InMemoryConfig({} as ServerConfigJson);
       const repo = getAccessKeyRepository();
       spyOn(repo, 'setDefaultDataLimit');
@@ -957,13 +1063,13 @@ describe('ShadowsocksManagerService', () => {
                 responseProcessed = true; // required for afterEach to pass.
               },
             },
-            done
+            () => {}
           );
         },
       };
-      service.setDefaultDataLimit({params: {limit}}, res, done);
+      service.setDefaultDataLimit({params: {limit}}, res, () => {});
     });
-    it('returns 400 when limit is missing values', async (done) => {
+    it('returns 400 when limit is missing values', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       await repo.createNewAccessKey();
@@ -972,10 +1078,9 @@ describe('ShadowsocksManagerService', () => {
       service.setDefaultDataLimit({params: {limit}}, res, (error) => {
         expect(error.statusCode).toEqual(400);
         responseProcessed = true; // required for afterEach to pass.
-        done();
       });
     });
-    it('returns 400 when limit has negative values', async (done) => {
+    it('returns 400 when limit has negative values', async () => {
       const repo = getAccessKeyRepository();
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
       await repo.createNewAccessKey();
@@ -984,10 +1089,9 @@ describe('ShadowsocksManagerService', () => {
       service.setDefaultDataLimit({params: {limit}}, res, (error) => {
         expect(error.statusCode).toEqual(400);
         responseProcessed = true; // required for afterEach to pass.
-        done();
       });
     });
-    it('returns 500 when the repository throws an exception', async (done) => {
+    it('returns 500 when the repository throws an exception', async () => {
       const repo = getAccessKeyRepository();
       spyOn(repo, 'setDefaultDataLimit').and.throwError('cannot write to disk');
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
@@ -997,13 +1101,12 @@ describe('ShadowsocksManagerService', () => {
       service.setDefaultDataLimit({params: {limit}}, res, (error) => {
         expect(error.statusCode).toEqual(500);
         responseProcessed = true; // required for afterEach to pass.
-        done();
       });
     });
   });
 
   describe('removeDefaultDataLimit', () => {
-    it('clears default data limit', async (done) => {
+    it('clears default data limit', async () => {
       const limit = {bytes: 10000};
       const serverConfig = new InMemoryConfig({accessKeyDataLimit: limit} as ServerConfigJson);
       const repo = getAccessKeyRepository();
@@ -1021,9 +1124,9 @@ describe('ShadowsocksManagerService', () => {
           responseProcessed = true; // required for afterEach to pass.
         },
       };
-      service.removeDefaultDataLimit({params: {}}, res, done);
+      service.removeDefaultDataLimit({params: {}}, res, () => {});
     });
-    it('returns 500 when the repository throws an exception', async (done) => {
+    it('returns 500 when the repository throws an exception', async () => {
       const repo = getAccessKeyRepository();
       spyOn(repo, 'removeDefaultDataLimit').and.throwError('cannot write to disk');
       const service = new ShadowsocksManagerServiceBuilder().accessKeys(repo).build();
@@ -1032,13 +1135,12 @@ describe('ShadowsocksManagerService', () => {
       service.removeDefaultDataLimit({params: {id: accessKey.id}}, res, (error) => {
         expect(error.statusCode).toEqual(500);
         responseProcessed = true; // required for afterEach to pass.
-        done();
       });
     });
   });
 
   describe('getShareMetrics', () => {
-    it('Returns value from sharedMetrics', (done) => {
+    it('Returns value from sharedMetrics', () => {
       const sharedMetrics = fakeSharedMetricsReporter();
       sharedMetrics.startSharing();
       const service = new ShadowsocksManagerServiceBuilder()
@@ -1053,12 +1155,12 @@ describe('ShadowsocksManagerService', () => {
             responseProcessed = true;
           },
         },
-        done
+        () => {}
       );
     });
   });
   describe('setShareMetrics', () => {
-    it('Sets value in the config', (done) => {
+    it('Sets value in the config', () => {
       const sharedMetrics = fakeSharedMetricsReporter();
       sharedMetrics.stopSharing();
       const service = new ShadowsocksManagerServiceBuilder()
@@ -1073,7 +1175,7 @@ describe('ShadowsocksManagerService', () => {
             responseProcessed = true;
           },
         },
-        done
+        () => {}
       );
     });
   });
@@ -1214,13 +1316,32 @@ describe('convertTimeRangeToHours', () => {
   });
 });
 
+class FakeOutlineCaddyServer implements OutlineCaddyController {
+  applyCalls: OutlineCaddyConfigPayload[] = [];
+  shouldFail = false;
+
+  async applyConfig(payload: OutlineCaddyConfigPayload): Promise<void> {
+    this.applyCalls.push(payload);
+    if (this.shouldFail) {
+      throw new Error('applyConfig failure');
+    }
+  }
+
+  async stop(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
 class ShadowsocksManagerServiceBuilder {
   private defaultServerName_ = 'default name';
-  private serverConfig_: JsonConfig<ServerConfigJson> = null;
+  private serverConfig_: JsonConfig<ServerConfigJson> = new InMemoryConfig<ServerConfigJson>(
+    {} as ServerConfigJson
+  );
   private accessKeys_: AccessKeyRepository = null;
   private shadowsocksServer_: ShadowsocksServer = null;
   private managerMetrics_: ManagerMetrics = null;
   private metricsPublisher_: SharedMetricsPublisher = null;
+  private caddyServer_: OutlineCaddyController = new FakeOutlineCaddyServer();
 
   defaultServerName(name: string): ShadowsocksManagerServiceBuilder {
     this.defaultServerName_ = name;
@@ -1252,6 +1373,11 @@ class ShadowsocksManagerServiceBuilder {
     return this;
   }
 
+  caddyServer(server: OutlineCaddyController): ShadowsocksManagerServiceBuilder {
+    this.caddyServer_ = server;
+    return this;
+  }
+
   build(): ShadowsocksManagerService {
     return new ShadowsocksManagerService(
       this.defaultServerName_,
@@ -1259,7 +1385,8 @@ class ShadowsocksManagerServiceBuilder {
       this.accessKeys_,
       this.shadowsocksServer_,
       this.managerMetrics_,
-      this.metricsPublisher_
+      this.metricsPublisher_,
+      this.caddyServer_
     );
   }
 }

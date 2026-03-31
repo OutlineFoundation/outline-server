@@ -1,0 +1,141 @@
+# Copyright 2024 The Outline Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Build and Push Shadowbox Docker Image
+
+on:
+  push:
+    branches:
+      - '**'  # Build on push to any branch
+    paths:
+      - 'src/shadowbox/**'
+      - '.github/workflows/build-shadowbox.yml'
+  pull_request:
+    paths:
+      - 'src/shadowbox/**'
+  workflow_dispatch:
+    inputs:
+      tag_suffix:
+        description: 'Tag suffix for the Docker image (e.g., "wss-test")'
+        required: false
+        default: ''
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: outline/shadowbox
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Branch name
+            type=ref,event=branch
+            # Tag name
+            type=ref,event=tag
+            # PR number
+            type=ref,event=pr
+            # Latest tag for main/master branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            # SHA short
+            type=sha,prefix={{branch}}-
+            # Custom suffix if provided
+            type=raw,value={{branch}}-${{ github.event.inputs.tag_suffix }},enable=${{ github.event.inputs.tag_suffix != '' }}
+            # WSS-specific tags
+            type=raw,value=wss-latest,enable=${{ startsWith(github.ref, 'refs/heads/wss-') }}
+            type=raw,value=wss-{{branch}},enable=${{ startsWith(github.ref, 'refs/heads/wss-') }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Update Go dependencies
+        run: |
+          go mod download
+          go mod tidy
+      
+      - name: Install Task
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+      
+      - name: Build Shadowbox for amd64
+        env:
+          OUTPUT_BASE: ${{ github.workspace }}/build
+          DOCKER_CONTENT_TRUST: "0"  # Disable content trust for CI builds
+        run: |
+          # Build from root directory to have access to all taskfiles
+          task shadowbox:docker:build TARGET_ARCH=x86_64 IMAGE_NAME=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:amd64-${{ github.sha }} IMAGE_VERSION=${{ github.sha }}
+      
+      - name: Build Shadowbox for arm64  
+        env:
+          OUTPUT_BASE: ${{ github.workspace }}/build
+          DOCKER_CONTENT_TRUST: "0"  # Disable content trust for CI builds
+        run: |
+          # Build from root directory to have access to all taskfiles
+          task shadowbox:docker:build TARGET_ARCH=arm64 IMAGE_NAME=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:arm64-${{ github.sha }} IMAGE_VERSION=${{ github.sha }}
+      
+      - name: Push images
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:amd64-${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:arm64-${{ github.sha }}
+      
+      - name: Create and push manifest
+        if: github.event_name != 'pull_request'
+        env:
+          DOCKER_CLI_EXPERIMENTAL: enabled
+        run: |
+          # Parse tags and create/push manifest for each
+          echo "${{ steps.meta.outputs.tags }}" | while read -r tag; do
+            echo "Creating manifest for ${tag}"
+            docker manifest create ${tag} \
+              --amend ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:amd64-${{ github.sha }} \
+              --amend ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:arm64-${{ github.sha }}
+            docker manifest push ${tag}
+          done
