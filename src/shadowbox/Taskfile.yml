@@ -23,7 +23,7 @@ tasks:
     vars:
       TARGET_OS: '{{.TARGET_OS | default "linux"}}'
       TARGET_ARCH: '{{.TARGET_ARCH | default "x86_64"}}'
-      GOARCH: '{{get (dict "x86_64" "amd64") .TARGET_ARCH | default .TARGET_ARCH}}'
+      GOARCH: '{{get (dict "x86_64" "amd64" "aarch64" "arm64") .TARGET_ARCH | default .TARGET_ARCH}}'
       TARGET_DIR: '{{.TARGET_DIR | default (joinPath .OUTPUT_BASE .TARGET_OS .TARGET_ARCH)}}'
       NODE_DIR: '{{joinPath .TARGET_DIR "app"}}'
       BIN_DIR: '{{joinPath .TARGET_DIR "bin"}}'
@@ -79,10 +79,19 @@ tasks:
       # Newer node images have no valid content trust data.
       # Pin the image node:16.18.0-alpine3.16 by hash.
       # See image at https://hub.docker.com/_/node/tags?page=1&name=18.18.0-alpine3.18
+      # Note: "aarch64" is an alias for "arm64" — Linux ARM64 hosts report "aarch64" via uname -m.
       NODE_IMAGE: '{{get
           (dict
-            "x86_64" "node@sha256:a0b787b0d53feacfa6d606fb555e0dbfebab30573277f1fe25148b05b66fa097"
-            "arm64" "node@sha256:b4b7a1dd149c65ee6025956ac065a843b4409a62068bd2b0cbafbb30ca2fab3b"
+            "x86_64"  "node@sha256:a0b787b0d53feacfa6d606fb555e0dbfebab30573277f1fe25148b05b66fa097"
+            "arm64"   "node@sha256:b4b7a1dd149c65ee6025956ac065a843b4409a62068bd2b0cbafbb30ca2fab3b"
+            "aarch64" "node@sha256:b4b7a1dd149c65ee6025956ac065a843b4409a62068bd2b0cbafbb30ca2fab3b"
+          ) .TARGET_ARCH
+        }}'
+      DOCKER_PLATFORM: '{{get
+          (dict
+            "x86_64"  "linux/amd64"
+            "arm64"   "linux/arm64"
+            "aarch64" "linux/arm64"
           ) .TARGET_ARCH
         }}'
     env:
@@ -103,6 +112,7 @@ tasks:
       # Build image with given root
       - |
         "${DOCKER:-docker}" build --force-rm \
+          --platform '{{.DOCKER_PLATFORM}}' \
           --build-arg NODE_IMAGE='{{.NODE_IMAGE}}' \
           --build-arg VERSION='{{.VERSION}}' \
           -f '{{joinPath .TASKFILE_DIR "docker" "Dockerfile"}}' \
