@@ -25,6 +25,7 @@ import {
   AccessKeyId,
   AccessKeyRepository,
   DataLimit,
+  ListenerType,
   ProxyParams,
 } from '../model/access_key';
 import * as errors from '../model/errors';
@@ -39,6 +40,7 @@ interface AccessKeyStorageJson {
   port: number;
   encryptionMethod?: string;
   dataLimit?: DataLimit;
+  listeners?: ListenerType[];
 }
 
 // The configuration file format as json.
@@ -55,7 +57,8 @@ class ServerAccessKey implements AccessKey {
     readonly id: AccessKeyId,
     public name: string,
     readonly proxyParams: ProxyParams,
-    public dataLimit?: DataLimit
+    public dataLimit?: DataLimit,
+    public listeners?: ListenerType[]
   ) {}
 }
 
@@ -76,7 +79,8 @@ function makeAccessKey(hostname: string, accessKeyJson: AccessKeyStorageJson): A
     accessKeyJson.id,
     accessKeyJson.name,
     proxyParams,
-    accessKeyJson.dataLimit
+    accessKeyJson.dataLimit,
+    accessKeyJson.listeners
   );
 }
 
@@ -88,6 +92,7 @@ function accessKeyToStorageJson(accessKey: AccessKey): AccessKeyStorageJson {
     port: accessKey.proxyParams.portNumber,
     encryptionMethod: accessKey.proxyParams.encryptionMethod,
     dataLimit: accessKey.dataLimit,
+    listeners: accessKey.listeners,
   };
 }
 
@@ -234,7 +239,8 @@ export class ServerAccessKeyRepository implements AccessKeyRepository {
     };
     const name = params?.name ?? '';
     const dataLimit = params?.dataLimit;
-    const accessKey = new ServerAccessKey(id, name, proxyParams, dataLimit);
+    const listeners = params?.listeners;
+    const accessKey = new ServerAccessKey(id, name, proxyParams, dataLimit, listeners);
     this.accessKeys.push(accessKey);
     this.saveAccessKeys();
     await this.updateServer();
@@ -299,6 +305,20 @@ export class ServerAccessKeyRepository implements AccessKeyRepository {
     this.enforceAccessKeyDataLimits();
   }
 
+  setAccessKeyListeners(id: AccessKeyId, listeners: ListenerType[]): void {
+    this.getAccessKey(id).listeners = listeners;
+    this.saveAccessKeys();
+    this.updateServer();
+  }
+
+  setListenersForAllKeys(listeners: ListenerType[]): void {
+    for (const accessKey of this.accessKeys) {
+      accessKey.listeners = listeners;
+    }
+    this.saveAccessKeys();
+    this.updateServer();
+  }
+
   // Compares access key usage with collected metrics, marking them as under or over limit.
   // Updates access key data usage.
   async enforceAccessKeyDataLimits() {
@@ -330,6 +350,7 @@ export class ServerAccessKeyRepository implements AccessKeyRepository {
           port: key.proxyParams.portNumber,
           cipher: key.proxyParams.encryptionMethod,
           secret: key.proxyParams.password,
+          listeners: key.listeners, // Pass listeners to enable WebSocket config generation
         };
       });
     return this.shadowsocksServer.update(serverAccessKeys);

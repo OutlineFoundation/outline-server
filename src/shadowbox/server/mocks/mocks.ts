@@ -13,7 +13,11 @@
 // limitations under the License.
 
 import {PrometheusClient, QueryResultData} from '../../infrastructure/prometheus_scraper';
-import {ShadowsocksAccessKey, ShadowsocksServer} from '../../model/shadowsocks_server';
+import {
+  ListenerSettings,
+  ShadowsocksAccessKey,
+  ShadowsocksServer,
+} from '../../model/shadowsocks_server';
 import {TextFile} from '../../infrastructure/text_file';
 
 export class InMemoryFile implements TextFile {
@@ -37,14 +41,23 @@ export class InMemoryFile implements TextFile {
 
 export class FakeShadowsocksServer implements ShadowsocksServer {
   private accessKeys: ShadowsocksAccessKey[] = [];
+  private listeners?: ListenerSettings;
 
   update(keys: ShadowsocksAccessKey[]) {
     this.accessKeys = keys;
     return Promise.resolve();
   }
 
+  configureListeners(listeners: ListenerSettings | undefined) {
+    this.listeners = listeners;
+  }
+
   getAccessKeys() {
     return this.accessKeys;
+  }
+
+  getListenerSettings() {
+    return this.listeners;
   }
 }
 

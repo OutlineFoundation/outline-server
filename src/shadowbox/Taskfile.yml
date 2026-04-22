@@ -18,6 +18,18 @@ requires:
   vars: [OUTPUT_BASE]
 
 tasks:
+  build_outline_caddy:
+    desc: Build the OutlineCaddy binary using xcaddy
+    requires: {vars: [TARGET_DIR, TARGET_OS, GOARCH]}
+    cmds:
+      - mkdir -p '{{.TARGET_DIR}}'
+      - |
+        XCADDY_GOOS={{.TARGET_OS}} XCADDY_GOARCH={{.GOARCH}} go tool xcaddy build \
+          --output '{{joinPath .TARGET_DIR "outline-caddy"}}' \
+          --with github.com/Jigsaw-Code/outline-ss-server/outlinecaddy@v0.0.1 \
+          --with github.com/iamd3vil/caddy_yaml_adapter \
+          --with github.com/mholt/caddy-l4
+
   build:
     desc: Build the Outline Server Node.js app
     vars:
@@ -40,6 +52,11 @@ tasks:
         vars: {TARGET_DIR: '{{.BIN_DIR}}'}
       # Set CGO_ENABLED=0 to force static linkage. See https://mt165.co.uk/blog/static-link-go/.
       - GOOS={{.TARGET_OS}} GOARCH={{.GOARCH}} CGO_ENABLED=0 go build -ldflags='-s -w -X main.version=embedded' -o '{{.BIN_DIR}}/' github.com/Jigsaw-Code/outline-ss-server/cmd/outline-ss-server
+      - task: build_outline_caddy
+        vars:
+          TARGET_DIR: '{{.BIN_DIR}}'
+          TARGET_OS: '{{.TARGET_OS}}'
+          GOARCH: '{{.GOARCH}}'
 
   start:
     desc: Run the Outline server locally
