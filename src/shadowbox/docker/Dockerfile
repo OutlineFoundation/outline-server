@@ -18,7 +18,7 @@ FROM ${NODE_IMAGE}
 ARG VERSION
 
 # Save metadata on the software versions we are using.
-LABEL shadowbox.node_version=16.18.0
+LABEL shadowbox.node_version=18.20.8
 
 LABEL shadowbox.github.release=${VERSION}
 
