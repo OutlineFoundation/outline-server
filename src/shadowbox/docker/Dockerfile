@@ -28,7 +28,10 @@ STOPSIGNAL SIGKILL
 # Upgrade installed Alpine packages to pick up security fixes (musl-utils, busybox, ssl_client, etc.).
 # We use curl to detect the server's public IP. We need to use the --date option in `date` to
 # safely grab the ip-to-country database.
-RUN apk upgrade --no-cache && apk add --no-cache --upgrade coreutils curl
+# Remove npm/npx CLI — the runtime only invokes `node`, and npm ships old transitive deps that
+# trip image vulnerability scanners.
+RUN apk upgrade --no-cache && apk add --no-cache --upgrade coreutils curl \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY . /
 

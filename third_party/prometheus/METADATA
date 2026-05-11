@@ -10,21 +10,21 @@ third_party {
   }
   url {
     type: ARCHIVE
-    value: "https://github.com/prometheus/prometheus/releases/download/v2.53.4/prometheus-2.53.4.linux-amd64.tar.gz"
+    value: "https://github.com/prometheus/prometheus/releases/download/v3.5.3/prometheus-3.5.3.linux-amd64.tar.gz"
   }
   url {
     type: ARCHIVE
-    value: "https://github.com/prometheus/prometheus/releases/download/v2.53.4/prometheus-2.53.4.linux-arm64.tar.gz"
+    value: "https://github.com/prometheus/prometheus/releases/download/v3.5.3/prometheus-3.5.3.linux-arm64.tar.gz"
   }
   url {
     type: ARCHIVE
-    value: "https://github.com/prometheus/prometheus/releases/download/v2.53.4/prometheus-2.53.4.darwin-amd64.tar.gz"
+    value: "https://github.com/prometheus/prometheus/releases/download/v3.5.3/prometheus-3.5.3.darwin-amd64.tar.gz"
   }
   url {
     type: ARCHIVE
-    value: "https://github.com/prometheus/prometheus/releases/download/v2.53.4/prometheus-2.53.4.darwin-arm64.tar.gz"
+    value: "https://github.com/prometheus/prometheus/releases/download/v3.5.3/prometheus-3.5.3.darwin-arm64.tar.gz"
   }
-  version: "2.53.4"
-  last_upgrade_date { year: 2025 month: 3 day: 20 }
+  version: "3.5.3"
+  last_upgrade_date { year: 2026 month: 5 day: 11 }
   license_type: PERMISSIVE
 }
