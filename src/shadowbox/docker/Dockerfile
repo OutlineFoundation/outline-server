@@ -25,9 +25,10 @@ LABEL shadowbox.github.release=${VERSION}
 # The user management service doesn't quit with SIGTERM.
 STOPSIGNAL SIGKILL
 
+# Upgrade installed Alpine packages to pick up security fixes (musl-utils, busybox, ssl_client, etc.).
 # We use curl to detect the server's public IP. We need to use the --date option in `date` to
 # safely grab the ip-to-country database.
-RUN apk add --no-cache --upgrade coreutils curl
+RUN apk upgrade --no-cache && apk add --no-cache --upgrade coreutils curl
 
 COPY . /
 
