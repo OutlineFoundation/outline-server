@@ -1,8 +1,6 @@
 module localhost
 
-go 1.24.0
-
-toolchain go1.25.9
+go 1.26.3
 
 require (
 	github.com/Jigsaw-Code/outline-ss-server v1.7.3
