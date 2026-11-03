@@ -111,6 +111,9 @@ export class ServerAccessKeyRepository implements AccessKeyRepository {
   private static DATA_LIMITS_ENFORCEMENT_INTERVAL_MS = 60 * 60 * 1000; // 1h
   private NEW_USER_ENCRYPTION_METHOD = 'chacha20-ietf-poly1305';
   private accessKeys: ServerAccessKey[];
+  private enforcement?: Promise<void>;
+  private enforcementRequested = false;
+  private limitUpdatePending = false;
 
   constructor(
     private portForNewAccessKeys: number,
@@ -132,19 +135,20 @@ export class ServerAccessKeyRepository implements AccessKeyRepository {
   // Starts the Shadowsocks server and exposes the access key configuration to the server.
   // Periodically enforces access key limits.
   async start(clock: Clock): Promise<void> {
-    const tryEnforceDataLimits = async () => {
-      try {
-        await this.enforceAccessKeyDataLimits();
-      } catch (e) {
-        logging.error(`Failed to enforce access key limits: ${e}`);
-      }
-    };
-    await tryEnforceDataLimits();
+    await this.tryEnforceDataLimits();
     await this.updateServer();
     clock.setInterval(
-      tryEnforceDataLimits,
+      () => this.tryEnforceDataLimits(),
       ServerAccessKeyRepository.DATA_LIMITS_ENFORCEMENT_INTERVAL_MS
     );
+  }
+
+  private async tryEnforceDataLimits(): Promise<void> {
+    try {
+      await this.enforceAccessKeyDataLimits();
+    } catch (e) {
+      logging.error(`Failed to enforce access key limits: ${e}`);
+    }
   }
 
   private isExistingAccessKeyId(id: AccessKeyId): boolean {
@@ -276,13 +280,13 @@ export class ServerAccessKeyRepository implements AccessKeyRepository {
   setAccessKeyDataLimit(id: AccessKeyId, limit: DataLimit): void {
     this.getAccessKey(id).dataLimit = limit;
     this.saveAccessKeys();
-    this.enforceAccessKeyDataLimits();
+    void this.tryEnforceDataLimits();
   }
 
   removeAccessKeyDataLimit(id: AccessKeyId): void {
     delete this.getAccessKey(id).dataLimit;
     this.saveAccessKeys();
-    this.enforceAccessKeyDataLimits();
+    void this.tryEnforceDataLimits();
   }
 
   get defaultDataLimit(): DataLimit | undefined {
@@ -291,20 +295,48 @@ export class ServerAccessKeyRepository implements AccessKeyRepository {
 
   setDefaultDataLimit(limit: DataLimit): void {
     this._defaultDataLimit = limit;
-    this.enforceAccessKeyDataLimits();
+    void this.tryEnforceDataLimits();
   }
 
   removeDefaultDataLimit(): void {
     delete this._defaultDataLimit;
-    this.enforceAccessKeyDataLimits();
+    void this.tryEnforceDataLimits();
   }
 
   // Compares access key usage with collected metrics, marking them as under or over limit.
   // Updates access key data usage.
-  async enforceAccessKeyDataLimits() {
-    const metrics = new PrometheusManagerMetrics(this.prometheusClient);
-    const bytesTransferredById = (await metrics.getOutboundByteTransfer({hours: 30 * 24}))
-      .bytesTransferredByUserId;
+  enforceAccessKeyDataLimits(): Promise<void> {
+    this.enforcementRequested = true;
+    if (!this.enforcement) {
+      this.enforcement = this.runDataLimitEnforcement();
+    }
+    return this.enforcement;
+  }
+
+  private async runDataLimitEnforcement(): Promise<void> {
+    try {
+      do {
+        this.enforcementRequested = false;
+        await this.enforceDataLimitsOnce();
+      } while (this.enforcementRequested);
+    } finally {
+      this.enforcement = undefined;
+    }
+  }
+
+  private async enforceDataLimitsOnce(): Promise<void> {
+    // Unlimited keys don't need a 30-day Prometheus scan. Still run the loop
+    // below so removing the last limit re-enables any previously blocked keys.
+    const hasDataLimits = this.accessKeys.some(
+      (key) => (key.dataLimit ?? this._defaultDataLimit) !== undefined
+    );
+    const bytesTransferredById = hasDataLimits
+      ? (
+          await new PrometheusManagerMetrics(this.prometheusClient).getOutboundByteTransfer({
+            hours: 30 * 24,
+          })
+        ).bytesTransferredByUserId
+      : {};
     let limitStatusChanged = false;
     for (const accessKey of this.accessKeys) {
       const usageBytes = bytesTransferredById[accessKey.id] ?? 0;
@@ -316,8 +348,12 @@ export class ServerAccessKeyRepository implements AccessKeyRepository {
       accessKey.reachedDataLimit = usageBytes >= limitBytes;
       limitStatusChanged = accessKey.reachedDataLimit !== oldReachedDataLimit || limitStatusChanged;
     }
-    if (limitStatusChanged) {
+    this.limitUpdatePending = this.limitUpdatePending || limitStatusChanged;
+    if (this.limitUpdatePending) {
       await this.updateServer();
+      // Keep this set on failure so the next enforcement retries the update
+      // even when the computed limit status itself has not changed.
+      this.limitUpdatePending = false;
     }
   }
 
