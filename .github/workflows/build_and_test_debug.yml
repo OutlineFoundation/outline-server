@@ -40,7 +40,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 26
           cache: npm
 
       - name: Install Go
@@ -52,7 +52,7 @@ jobs:
       - name: Install NPM Dependencies
         run: npm ci
         env:
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
 
       - name: Lint
         run: ./task lint
@@ -68,7 +68,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 26
           cache: npm
 
       - name: Install NPM Dependencies
@@ -100,7 +100,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 26
           cache: npm
 
       - name: Install Go
@@ -112,7 +112,7 @@ jobs:
       - name: Install NPM Dependencies
         run: npm ci
         env:
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
 
       - name: Shadowbox Debug Build (arm64)
         run: TARGET_ARCH=aarch64 ./task shadowbox:build
@@ -147,7 +147,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 26
           cache: npm
 
       - name: Install NPM Dependencies
@@ -171,7 +171,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 26
           cache: npm
 
       - name: Install NPM Dependencies

@@ -76,14 +76,14 @@ tasks:
       IMAGE_NAME: '{{.IMAGE_NAME | default "localhost/outline/shadowbox"}}'
       TARGET_ARCH: '{{.TARGET_ARCH | default "x86_64"}}'
       IMAGE_ROOT: '{{joinPath .OUTPUT_BASE "image_root" .TARGET_ARCH}}'
-      # Pin the image node:18.20.8-alpine3.21 by hash.
-      # See image at https://hub.docker.com/_/node/tags?page=1&name=18.20.8-alpine3.21
+      # Pin the image node:26.13.1-alpine3.24 by hash.
+      # See image at https://hub.docker.com/_/node/tags?page=1&name=26.13.1-alpine3.24
       # Note: "aarch64" is an alias for "arm64" — Linux ARM64 hosts report "aarch64" via uname -m.
       NODE_IMAGE: '{{get
           (dict
-            "x86_64"  "node@sha256:929b04d7c782f04f615cf785488fed452b6569f87c73ff666ad553a7554f0006"
-            "arm64"   "node@sha256:c2281c62c4aadf92ea71a6c05e6c8e640634b6a99dc52a6e54575f9cb298a037"
-            "aarch64" "node@sha256:c2281c62c4aadf92ea71a6c05e6c8e640634b6a99dc52a6e54575f9cb298a037"
+            "x86_64"  "node@sha256:a90bda2938f2b57112d94ee2e3722c5346efca76e4a034042b5223197567a16c"
+            "arm64"   "node@sha256:5b1cae3b6a917e4c6ee860d8eb5bd77655e75f13964c061f8755ccbc29e64312"
+            "aarch64" "node@sha256:5b1cae3b6a917e4c6ee860d8eb5bd77655e75f13964c061f8755ccbc29e64312"
           ) .TARGET_ARCH
         }}'
       DOCKER_PLATFORM: '{{get

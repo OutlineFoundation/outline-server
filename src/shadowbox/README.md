@@ -30,8 +30,8 @@ The Outline Server, internal name "Shadowbox," is designed to streamline the set
 **Prerequisites**
 
 - [Docker](https://docs.docker.com/engine/install/)
-- [Node](https://nodejs.org/en/download/) LTS (`lts/hydrogen`, version `18.16.0`)
-- [NPM](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) (version `9.5.1`)
+- [Node](https://nodejs.org/en/download/) LTS (`lts/lithium`, version `26.13.1`)
+- [NPM](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) (version `11.x`)
 
 > [!TIP]
 > If you use `nvm`, switch to the correct Node version with `nvm use`.
