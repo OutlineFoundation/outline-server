@@ -79,7 +79,18 @@ export interface ManagerMetrics {
 
 // Reads manager metrics from a Prometheus instance.
 export class PrometheusManagerMetrics implements ManagerMetrics {
-  constructor(private prometheusClient: PrometheusClient) {}
+  private readonly cachedPrometheusClient: PrometheusClient;
+
+  constructor(private prometheusClient: PrometheusClient) {
+    this.cachedPrometheusClient = {
+      query: (query) =>
+        this.cachedQuery(JSON.stringify(['query', query]), () => prometheusClient.query(query)),
+      queryRange: (query, start, end, step) =>
+        this.cachedQuery(JSON.stringify(['queryRange', query, start, end, step]), () =>
+          prometheusClient.queryRange(query, start, end, step)
+        ),
+    };
+  }
 
   async getOutboundByteTransfer(timeframe: DataUsageTimeframe): Promise<DataUsageByUser> {
     // TODO(fortuna): Consider pre-computing this to save server's CPU.
@@ -100,7 +111,7 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
   }
 
   async getServerMetrics(timeframe: Duration): Promise<ServerMetrics> {
-    const now = new Date().getTime() / 1000;
+    const now = Date.now() / 1000;
     // We need to calculate consistent start and end times for Prometheus range
     // queries. Rounding the end time *up* to the nearest multiple of the step
     // prevents time "drift" between queries, which is crucial for reliable step
@@ -165,7 +176,7 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
       locations: [],
     };
 
-    const bandwidthRangeValues = bandwidthRange.result[0].values ?? [];
+    const bandwidthRangeValues = bandwidthRange.result[0]?.values ?? [];
     const currentBandwidth = bandwidthRangeValues[bandwidthRangeValues.length - 1];
 
     if (currentBandwidth) {
@@ -173,16 +184,13 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
       serverMetrics.bandwidth.current.timestamp = currentBandwidth[0];
     }
 
-    for (const result of bandwidthRange.result) {
-      const peakDataTransferred = findPeak(result.values ?? []);
-      if (peakDataTransferred !== null) {
-        const peakValue = parseFloat(peakDataTransferred[1]);
-        if (peakValue > 0) {
-          serverMetrics.bandwidth.peak.data.bytes = peakValue;
-          serverMetrics.bandwidth.peak.timestamp = Math.min(now, peakDataTransferred[0]);
-        }
+    const peakDataTransferred = findPeak(bandwidthRangeValues);
+    if (peakDataTransferred !== null) {
+      const peakValue = parseFloat(peakDataTransferred[1]);
+      if (peakValue > 0) {
+        serverMetrics.bandwidth.peak.data.bytes = peakValue;
+        serverMetrics.bandwidth.peak.timestamp = Math.min(now, peakDataTransferred[0]);
       }
-      break; // There should only be one result.
     }
 
     const locationMap = new Map<string, ServerMetricsLocationEntry>();
@@ -233,30 +241,34 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
     };
   }
 
-  private prometheusCache = new Map<string, {timestamp: number; result: QueryResultData}>();
+  private prometheusCache = new Map<
+    string,
+    {timestamp: number; result: Promise<QueryResultData>}
+  >();
 
-  private get cachedPrometheusClient() {
-    return new Proxy(this.prometheusClient, {
-      get: (target, prop) => {
-        if (typeof target[prop] !== 'function') {
-          return target[prop];
-        }
+  private async cachedQuery(
+    cacheId: string,
+    query: () => Promise<QueryResultData>
+  ): Promise<QueryResultData> {
+    const cached = this.prometheusCache.get(cacheId);
+    if (cached) {
+      return cached.result;
+    }
 
-        return async (query, ...args) => {
-          const cacheId = `${String(prop)}: ${query} (args: ${args.join(', ')}))`;
-
-          if (this.prometheusCache.has(cacheId)) {
-            return this.prometheusCache.get(cacheId).result;
-          }
-
-          const result = await (target[prop] as Function)(query, ...args);
-
-          this.prometheusCache.set(cacheId, {timestamp: Date.now(), result});
-
-          return result;
-        };
-      },
-    });
+    // Cache the pending query too, so simultaneous dashboard requests share work.
+    const entry = {timestamp: Date.now(), result: query()};
+    this.prometheusCache.set(cacheId, entry);
+    try {
+      const result = await entry.result;
+      entry.timestamp = Date.now();
+      return result;
+    } catch (error) {
+      // A failed query must be retried; don't evict a newer entry with the same key.
+      if (this.prometheusCache.get(cacheId) === entry) {
+        this.prometheusCache.delete(cacheId);
+      }
+      throw error;
+    }
   }
 
   private prunePrometheusCache() {
@@ -328,7 +340,7 @@ function findPeak(values: PrometheusValue[]): PrometheusValue | null {
     if (currentValue > maxValue) {
       maxValue = currentValue;
       peak = value;
-    } else if (currentValue === maxValue && value[0] > peak[0]) {
+    } else if (peak !== null && currentValue === maxValue && value[0] > peak[0]) {
       peak = value;
     }
   }

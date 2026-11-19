@@ -427,4 +427,53 @@ describe('PrometheusManagerMetrics', () => {
     expect(bytesTransferredByUserId['access-key-2']).toEqual(10000);
     done();
   });
+
+  it('shares pending queries and reuses successful results', async () => {
+    let resolveResult: (result: QueryResultData) => void = () => {};
+    const pendingResult = new Promise<QueryResultData>((resolve) => {
+      resolveResult = resolve;
+    });
+    const prometheusClient = {
+      query: jasmine.createSpy('query').and.returnValue(pendingResult),
+      queryRange: jasmine.createSpy('queryRange').and.returnValue(pendingResult),
+    } as PrometheusClient;
+    const managerMetrics = new PrometheusManagerMetrics(prometheusClient);
+
+    const first = managerMetrics.getServerMetrics({seconds: 0});
+    const second = managerMetrics.getServerMetrics({seconds: 0});
+
+    expect(prometheusClient.query).toHaveBeenCalledTimes(4);
+    expect(prometheusClient.queryRange).toHaveBeenCalledTimes(3);
+
+    resolveResult({resultType: 'vector', result: []});
+    await Promise.all([first, second]);
+    await managerMetrics.getServerMetrics({seconds: 0});
+
+    expect(prometheusClient.query).toHaveBeenCalledTimes(4);
+    expect(prometheusClient.queryRange).toHaveBeenCalledTimes(3);
+  });
+
+  it('evicts a rejected cached query so the next request retries it', async () => {
+    const emptyResult: QueryResultData = {resultType: 'vector', result: []};
+    let queryRangeCalls = 0;
+    const prometheusClient = {
+      query: async () => emptyResult,
+      queryRange: async () => {
+        queryRangeCalls += 1;
+        if (queryRangeCalls === 1) {
+          throw new Error('query failed');
+        }
+        return emptyResult;
+      },
+    } as PrometheusClient;
+    const managerMetrics = new PrometheusManagerMetrics(prometheusClient);
+
+    await expectAsync(managerMetrics.getServerMetrics({seconds: 0})).toBeRejectedWithError(
+      'query failed'
+    );
+    await managerMetrics.getServerMetrics({seconds: 0});
+
+    expect(queryRangeCalls).toEqual(4);
+  });
+
 });
