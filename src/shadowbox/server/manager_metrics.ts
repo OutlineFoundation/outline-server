@@ -165,7 +165,7 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
       locations: [],
     };
 
-    const bandwidthRangeValues = bandwidthRange.result[0].values ?? [];
+    const bandwidthRangeValues = bandwidthRange.result[0]?.values ?? [];
     const currentBandwidth = bandwidthRangeValues[bandwidthRangeValues.length - 1];
 
     if (currentBandwidth) {
