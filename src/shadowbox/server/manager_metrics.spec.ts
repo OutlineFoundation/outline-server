@@ -214,6 +214,31 @@ describe('PrometheusManagerMetrics', () => {
     done();
   });
 
+  it('getServerMetrics - returns zeroed metrics when Prometheus has no series', async (done) => {
+    // A server that has not reported any traffic yet gets empty results for every query.
+    const emptyResult = async (): Promise<QueryResultData> => ({resultType: 'matrix', result: []});
+    const managerMetrics = new PrometheusManagerMetrics({
+      query: emptyResult,
+      queryRange: emptyResult,
+    });
+
+    const serverMetrics = await managerMetrics.getServerMetrics({seconds: 0});
+
+    expect(serverMetrics).toEqual({
+      server: {
+        tunnelTime: {seconds: 0},
+        dataTransferred: {bytes: 0},
+        bandwidth: {
+          current: {data: {bytes: 0}, timestamp: null},
+          peak: {data: {bytes: 0}, timestamp: null},
+        },
+        locations: [],
+      },
+      accessKeys: [],
+    });
+    done();
+  });
+
   it('getServerMetrics - does a full outer join on metric data', async (done) => {
     const managerMetrics = new PrometheusManagerMetrics(
       new QueryMapPrometheusClient(
