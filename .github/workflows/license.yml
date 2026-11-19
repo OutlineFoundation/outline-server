@@ -15,8 +15,12 @@
 name: License checks
 
 concurrency:
-  group: ${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  # Scope the group to this workflow. Without the workflow name, workflows
+  # triggered by the same push share one group and cancel each other.
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  # Only supersede runs for pull requests, so that runs on master and the
+  # scheduled run always complete.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 on:
   pull_request:
