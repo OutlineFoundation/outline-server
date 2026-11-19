@@ -33,22 +33,27 @@ on:
   schedule:
     - cron: "0 13 * * *"  # Run daily at 1PM UTC.
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: 26
           cache: npm
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
@@ -67,10 +72,12 @@ jobs:
     needs: lint
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: 26
           cache: npm
@@ -88,7 +95,7 @@ jobs:
         run: ./task shadowbox:integration_test
 
       - name: Verify Open API Spec
-        uses: mbowman100/swagger-validator-action@master
+        uses: mbowman100/swagger-validator-action@b1f592cf919014c7e1865f0a5e552886aee23e37  # master as of 2026-11-05; no release since 2.0 (2020)
         with:
           files: |
             src/shadowbox/server/api.yml
@@ -99,16 +106,18 @@ jobs:
     needs: lint
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: 26
           cache: npm
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
@@ -132,13 +141,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Outline Server
         run: ./src/server_manager/install_scripts/install_server.sh --hostname localhost
 
       - name: Test API
-        run: 'curl --silent --fail --insecure $(grep "apiUrl" /opt/outline/access.txt | cut -d: -f 2-)/server'
+        run: 'curl --silent --fail --insecure "$(grep "apiUrl" /opt/outline/access.txt | cut -d: -f 2-)/server"'
 
   metrics-server:
     name: Metrics Server
@@ -146,10 +157,12 @@ jobs:
     needs: lint
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: 26
           cache: npm
@@ -170,10 +183,12 @@ jobs:
     needs: lint
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: 26
           cache: npm
