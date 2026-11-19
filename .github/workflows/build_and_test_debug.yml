@@ -15,12 +15,11 @@
 name: Build and Test
 
 concurrency:
-  # Scope the group to this workflow. Without the workflow name, workflows
-  # triggered by the same push share one group and cancel each other.
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  # Only supersede runs for pull requests, so that runs on master and the
-  # scheduled run always complete.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Group by workflow and pull request number. Unlike the head branch name,
+  # the number is unique across forks. Runs that are not for a pull request
+  # fall back to the run ID, so each gets its own group and is never cancelled.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 on:
   pull_request:

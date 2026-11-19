@@ -15,7 +15,10 @@
 name: Pull Request Checks
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  # Group by workflow and pull request number. Unlike the head branch name,
+  # the number is unique across forks. Runs that are not for a pull request
+  # fall back to the run ID, so each gets its own group and is never cancelled.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 on:
