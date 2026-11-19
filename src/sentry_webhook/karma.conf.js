@@ -14,7 +14,7 @@
 // limitations under the License.
 
 const {makeConfig} = require('./test.webpack.js');
-process.env.CHROMIUM_BIN = require('puppeteer').executablePath();
+const puppeteer = require('puppeteer');
 
 const baseConfig = makeConfig({
   defaultMode: 'development',
@@ -27,7 +27,10 @@ for (const pattern of TEST_PATTERNS) {
   preprocessors[pattern] = ['webpack'];
 }
 
-module.exports = function (config) {
+module.exports = async function (config) {
+  // Recent Puppeteer versions resolve the browser path asynchronously.
+  process.env.CHROMIUM_BIN = await puppeteer.executablePath();
+
   config.set({
     frameworks: ['jasmine'],
     files: TEST_PATTERNS,

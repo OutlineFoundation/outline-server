@@ -52,7 +52,7 @@ jobs:
       - name: Install NPM Dependencies
         run: npm ci
         env:
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
 
       - name: Lint
         run: ./task lint
@@ -112,7 +112,7 @@ jobs:
       - name: Install NPM Dependencies
         run: npm ci
         env:
-          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
 
       - name: Shadowbox Debug Build (arm64)
         run: TARGET_ARCH=aarch64 ./task shadowbox:build

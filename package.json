@@ -43,5 +43,11 @@
     "hooks": {
       "pre-commit": "./task lint format"
     }
+  },
+  "allowScripts": {
+    "puppeteer@25.18.1": true,
+    "husky": true,
+    "core-js": false,
+    "dtrace-provider": false
   }
 }
