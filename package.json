@@ -29,7 +29,12 @@
     "postinstall": "go build github.com/go-task/task/v3/cmd/task"
   },
   "engines": {
-    "node": "18.x.x"
+    "node": "26.x.x"
+  },
+  "overrides": {
+    "restify-cors-middleware2": {
+      "restify": "^12.1.0"
+    }
   },
   "workspaces": [
     "src/*"

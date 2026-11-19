@@ -42,7 +42,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v6.1.0
         with:
-          node-version: 18
+          node-version: 26
           cache: npm
 
       - name: Install NPM Dependencies
