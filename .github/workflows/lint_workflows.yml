@@ -1,0 +1,64 @@
+# Copyright 2026 The Outline Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Lint workflows
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint Workflows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          # actionlint v1.7.12 requires Go >= 1.25, which go.mod satisfies.
+          go-version-file: go.mod
+          cache: false
+
+      # Run with `go run` at a pinned version rather than adding it to
+      # tools.go, which would pull its dependency tree into the root module.
+      - name: actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
+
+      - name: zizmor
+        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd  # v0.8.1
+        with:
+          version: 1.32.0
+          # `annotations: true` shows findings inline on the diff. It is
+          # mutually exclusive with the SARIF upload this action does by
+          # default, which would also need `security-events: write`, a
+          # permission that pull requests from forks cannot be granted.
+          advanced-security: false
+          annotations: true
