@@ -15,7 +15,10 @@
 name: License checks
 
 concurrency:
-  group: ${{ github.head_ref || github.ref }}
+  # Group by workflow and pull request number. Unlike the head branch name,
+  # the number is unique across forks. Runs that are not for a pull request
+  # fall back to the run ID, so each gets its own group and is never cancelled.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 on:
@@ -27,15 +30,20 @@ on:
     branches:
       - master
 
+permissions:
+  contents: read
+
 jobs:
   license-check:
     runs-on: ubuntu-latest
     steps:
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v3
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
       with:
         go-version-file: '${{ github.workspace }}/go.mod'
 
