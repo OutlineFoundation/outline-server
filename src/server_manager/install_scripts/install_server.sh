@@ -408,15 +408,17 @@ function add_api_url_to_config() {
 }
 
 function check_firewall() {
-  # TODO(JonathanDCohen) This is incorrect if access keys are using more than one port.
-  local -i ACCESS_KEY_PORT
-  ACCESS_KEY_PORT=$(fetch --insecure "${LOCAL_API_URL}/access-keys" |
+  local -i ACCESS_KEY_PORT="${FLAGS_KEYS_PORT}"
+  if [[ -z "${ACCESS_KEY_PORT}" ]]; then
+    ACCESS_KEY_PORT=$(fetch --insecure "${LOCAL_API_URL}/access-keys" |
       docker exec -i "${CONTAINER_NAME}" node -e '
           const fs = require("fs");
           const accessKeys = JSON.parse(fs.readFileSync(0, {encoding: "utf-8"}));
           console.log(accessKeys["accessKeys"][0]["port"]);
       ') || return
+  fi
   readonly ACCESS_KEY_PORT
+
   if ! fetch --max-time 5 --cacert "${SB_CERTIFICATE_FILE}" "${PUBLIC_API_URL}/access-keys" >/dev/null; then
      log_error "BLOCKED"
      FIREWALL_STATUS="\
@@ -436,7 +438,6 @@ Make sure to open the following ports on your firewall, router or cloud provider
 - Access key port ${ACCESS_KEY_PORT}, for TCP and UDP
 "
 }
-
 function set_hostname() {
   # These are URLs that return the client's apparent IP address.
   # We have more than one to try in case one starts failing
