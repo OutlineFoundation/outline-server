@@ -61,7 +61,7 @@ interface ServerMetricsLocationEntry {
 }
 
 interface ServerMetricsAccessKeyEntry {
-  accessKeyId: number;
+  accessKeyId: string;
   tunnelTime: Duration;
   dataTransferred: Data;
   connection: ConnectionStats;
@@ -88,7 +88,8 @@ export class PrometheusManagerMetrics implements ManagerMetrics {
     const result = await this.prometheusClient.query(
       `sum(increase(shadowsocks_data_bytes{dir=~"c<p|p>t"}[${timeframe.hours}h])) by (access_key)`
     );
-    const usage = {} as {[userId: string]: number};
+    // Custom IDs such as __proto__ must remain ordinary own properties.
+    const usage: {[userId: string]: number} = Object.create(null);
     for (const entry of result.result) {
       const bytes = Math.round(parseFloat(entry.value[1]));
       if (bytes === 0) {
@@ -297,7 +298,7 @@ function getServerMetricsAccessKeyEntry(
   let entry = map.get(accessKey);
   if (entry === undefined) {
     entry = {
-      accessKeyId: parseInt(accessKey),
+      accessKeyId: accessKey,
       dataTransferred: {bytes: 0},
       tunnelTime: {seconds: 0},
       connection: {

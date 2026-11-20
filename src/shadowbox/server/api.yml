@@ -208,7 +208,8 @@ paths:
                       type: object
                       properties:
                         accessKeyId:
-                          type: integer
+                          description: Exact access key ID.
+                          type: string
                         tunnelTime:
                           type: object
                           properties:

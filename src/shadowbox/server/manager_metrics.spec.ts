@@ -194,7 +194,7 @@ describe('PrometheusManagerMetrics', () => {
   },
   "accessKeys": [
     {
-      "accessKeyId": 0,
+      "accessKeyId": "0",
       "dataTransferred": {
         "bytes": 1000
       },
@@ -405,7 +405,7 @@ describe('PrometheusManagerMetrics', () => {
   },
   "accessKeys": [
     {
-      "accessKeyId": 1,
+      "accessKeyId": "1",
       "dataTransferred": {
         "bytes": 0
       },
@@ -421,7 +421,7 @@ describe('PrometheusManagerMetrics', () => {
       }
     },
     {
-      "accessKeyId": 0,
+      "accessKeyId": "0",
       "dataTransferred": {
         "bytes": 1000
       },
@@ -451,5 +451,34 @@ describe('PrometheusManagerMetrics', () => {
     expect(bytesTransferredByUserId['access-key-1']).toEqual(1000);
     expect(bytesTransferredByUserId['access-key-2']).toEqual(10000);
     done();
+  });
+
+  it('preserves custom access key IDs in server metrics', async () => {
+    const accessKeyIds = ['custom-id', '001', '9007199254740993'];
+    const prometheusClient = {
+      query: async (query: string): Promise<QueryResultData> => {
+        if (query.includes('shadowsocks_data_bytes{')) {
+          return {
+            resultType: 'vector',
+            result: accessKeyIds.map((accessKey, index) => ({
+              metric: {access_key: accessKey},
+              value: [1, String(index + 1)],
+            })),
+          };
+        }
+        return {resultType: 'vector', result: []};
+      },
+      queryRange: async (query: string): Promise<QueryResultData> => {
+        if (query.includes('shadowsocks_data_bytes_per_location')) {
+          return {resultType: 'matrix', result: [{metric: {}, values: []}]};
+        }
+        return {resultType: 'matrix', result: []};
+      },
+    } as PrometheusClient;
+    const managerMetrics = new PrometheusManagerMetrics(prometheusClient);
+
+    const serverMetrics = await managerMetrics.getServerMetrics({seconds: 0});
+
+    expect(serverMetrics.accessKeys.map((entry) => entry.accessKeyId)).toEqual(accessKeyIds);
   });
 });
