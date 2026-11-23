@@ -124,6 +124,37 @@ describe('OutlineSharedMetricsPublisher', () => {
       publisher.stopSharing();
     });
 
+    it('does not overlap usage reports', async () => {
+      const clock = new ManualClock();
+      const serverConfig = new InMemoryConfig<ServerConfigJson>({serverId: 'server-id'});
+      const usageMetrics = new ManualUsageMetrics();
+      usageMetrics.reportedUsage = [{country: 'AA', inboundBytes: 1, tunnelTimeSec: 1}];
+      const metricsCollector = new FakeMetricsCollector();
+      let finishUpload: () => void = () => {};
+      const upload = new Promise<void>((resolve) => {
+        finishUpload = resolve;
+      });
+      spyOn(metricsCollector, 'collectServerUsageMetrics').and.returnValue(upload);
+      const publisher = new OutlineSharedMetricsPublisher(
+        clock,
+        serverConfig,
+        null,
+        usageMetrics,
+        metricsCollector
+      );
+      publisher.startSharing();
+
+      const firstRun = clock.runCallbacks();
+      await Promise.resolve();
+      const secondRun = clock.runCallbacks();
+      await Promise.resolve();
+
+      expect(metricsCollector.collectServerUsageMetrics).toHaveBeenCalledTimes(1);
+
+      finishUpload();
+      await Promise.all([firstRun, secondRun]);
+    });
+
     it('reports ASN metrics correctly', async () => {
       const clock = new ManualClock();
       const serverConfig = new InMemoryConfig<ServerConfigJson>({serverId: 'server-id'});

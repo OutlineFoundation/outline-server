@@ -73,8 +73,8 @@ export interface SharedMetricsPublisher {
 }
 
 export interface UsageMetrics {
-  getReportedUsage(): Promise<ReportedUsage[]>;
-  reset();
+  getReportedUsage(endTimeMs?: number): Promise<ReportedUsage[]>;
+  reset(endTimeMs?: number);
 }
 
 // Reads data usage metrics from Prometheus.
@@ -83,8 +83,9 @@ export class PrometheusUsageMetrics implements UsageMetrics {
 
   constructor(private prometheusClient: PrometheusClient) {}
 
-  async getReportedUsage(): Promise<ReportedUsage[]> {
-    const timeDeltaSecs = Math.round((Date.now() - this.resetTimeMs) / 1000);
+  async getReportedUsage(endTimeMs = Date.now()): Promise<ReportedUsage[]> {
+    const timeDeltaMs = Math.max(1, endTimeMs - this.resetTimeMs);
+    const selectorTime = `[${timeDeltaMs}ms] @ ${endTimeMs / 1000}`;
 
     const usage = new Map<string, ReportedUsage>();
     const processResults = (
@@ -108,18 +109,20 @@ export class PrometheusUsageMetrics implements UsageMetrics {
       }
     };
 
-    // Query and process inbound data bytes by country+ASN.
-    const dataBytesQueryResponse = await this.prometheusClient.query(
-      `sum(increase(shadowsocks_data_bytes_per_location{dir=~"p>t|p<t"}[${timeDeltaSecs}s])) by (location, asn)`
-    );
+    // Both independent queries use the same snapshot boundary. Traffic during
+    // collection/upload belongs to the next report, not to a discarded gap.
+    const [dataBytesQueryResponse, tunnelTimeQueryResponse] = await Promise.all([
+      this.prometheusClient.query(
+        `sum(increase(shadowsocks_data_bytes_per_location{dir=~"p>t|p<t"}${selectorTime})) by (location, asn)`
+      ),
+      this.prometheusClient.query(
+        `sum(increase(shadowsocks_tunnel_time_seconds_per_location${selectorTime})) by (location, asn)`
+      ),
+    ]);
     processResults(dataBytesQueryResponse, (entry, value) => {
       entry.inboundBytes = Math.round(parseFloat(value));
     });
 
-    // Query and process tunneltime by country+ASN.
-    const tunnelTimeQueryResponse = await this.prometheusClient.query(
-      `sum(increase(shadowsocks_tunnel_time_seconds_per_location[${timeDeltaSecs}s])) by (location, asn)`
-    );
     processResults(tunnelTimeQueryResponse, (entry, value) => {
       entry.tunnelTimeSec = Math.round(parseFloat(value));
     });
@@ -127,8 +130,8 @@ export class PrometheusUsageMetrics implements UsageMetrics {
     return Array.from(usage.values());
   }
 
-  reset() {
-    this.resetTimeMs = Date.now();
+  reset(endTimeMs = Date.now()) {
+    this.resetTimeMs = endTimeMs;
   }
 }
 
@@ -149,10 +152,13 @@ export class RestMetricsCollectorClient implements MetricsCollectorClient {
   }
 
   private async postMetrics(urlPath: string, reportJson: string): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
     const options = {
       headers: {'Content-Type': 'application/json'},
       method: 'POST',
       body: reportJson,
+      signal: controller.signal,
     };
     const url = `${this.serviceUrl}${urlPath}`;
     logging.debug(`Posting metrics to ${url} with options ${JSON.stringify(options)}`);
@@ -166,6 +172,11 @@ export class RestMetricsCollectorClient implements MetricsCollectorClient {
       }
     } catch (e) {
       throw new Error(`Failed to post to metrics server: ${e}`);
+    } finally {
+      clearTimeout(timeout);
+      // Only the status is used. Abort the HTTP request itself, not just its
+      // proxy response stream, even when the collector never finishes its body.
+      controller.abort();
     }
   }
 }
@@ -175,6 +186,8 @@ export class RestMetricsCollectorClient implements MetricsCollectorClient {
 export class OutlineSharedMetricsPublisher implements SharedMetricsPublisher {
   // Time at which we started recording connection metrics.
   private reportStartTimestampMs: number;
+  private reportingUsage = false;
+  private reportingFeatures = false;
 
   // serverConfig: where the enabled/disable setting is persisted
   // keyConfig: where access keys are persisted
@@ -191,26 +204,36 @@ export class OutlineSharedMetricsPublisher implements SharedMetricsPublisher {
     this.reportStartTimestampMs = this.clock.now();
 
     this.clock.setInterval(async () => {
-      if (!this.isSharingEnabled()) {
+      if (!this.isSharingEnabled() || this.reportingUsage) {
         return;
       }
+      this.reportingUsage = true;
       try {
-        await this.reportServerUsageMetrics(await usageMetrics.getReportedUsage());
-        usageMetrics.reset();
+        const reportEndTimestampMs = this.clock.now();
+        await this.reportServerUsageMetrics(
+          await usageMetrics.getReportedUsage(reportEndTimestampMs),
+          reportEndTimestampMs
+        );
+        usageMetrics.reset(reportEndTimestampMs);
       } catch (err) {
         logging.error(`Failed to report server usage metrics: ${err}`);
+      } finally {
+        this.reportingUsage = false;
       }
     }, MS_PER_HOUR);
     // TODO(fortuna): also trigger report on shutdown, so data loss is minimized.
 
     this.clock.setInterval(async () => {
-      if (!this.isSharingEnabled()) {
+      if (!this.isSharingEnabled() || this.reportingFeatures) {
         return;
       }
+      this.reportingFeatures = true;
       try {
         await this.reportFeatureMetrics();
       } catch (err) {
         logging.error(`Failed to report feature metrics: ${err}`);
+      } finally {
+        this.reportingFeatures = false;
       }
     }, MS_PER_DAY);
   }
@@ -229,9 +252,10 @@ export class OutlineSharedMetricsPublisher implements SharedMetricsPublisher {
     return this.serverConfig.data().metricsEnabled || false;
   }
 
-  private async reportServerUsageMetrics(locationUsageMetrics: ReportedUsage[]): Promise<void> {
-    const reportEndTimestampMs = this.clock.now();
-
+  private async reportServerUsageMetrics(
+    locationUsageMetrics: ReportedUsage[],
+    reportEndTimestampMs: number
+  ): Promise<void> {
     const userReports: HourlyUserMetricsReportJson[] = [];
     for (const locationUsage of locationUsageMetrics) {
       if (locationUsage.inboundBytes === 0 && locationUsage.tunnelTimeSec === 0) {
@@ -257,11 +281,12 @@ export class OutlineSharedMetricsPublisher implements SharedMetricsPublisher {
       userReports,
     } as HourlyServerMetricsReportJson;
 
-    this.reportStartTimestampMs = reportEndTimestampMs;
-    if (userReports.length === 0) {
-      return;
+    if (userReports.length > 0) {
+      await this.metricsCollector.collectServerUsageMetrics(report);
     }
-    await this.metricsCollector.collectServerUsageMetrics(report);
+    // Keep the reporting window aligned with usageMetrics.reset(). On failure,
+    // the next attempt still includes usage since the previous successful report.
+    this.reportStartTimestampMs = reportEndTimestampMs;
   }
 
   private async reportFeatureMetrics(): Promise<void> {
