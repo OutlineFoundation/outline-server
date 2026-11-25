@@ -28,10 +28,6 @@ includes:
     taskfile: ./src/metrics_server/Taskfile.yml
     vars: {OUTPUT_BASE: '{{joinPath .BUILD_ROOT "metrics_server"}}'}
 
-  sentry_webhook:
-    taskfile: ./src/sentry_webhook/Taskfile.yml
-    vars: {OUTPUT_BASE: '{{joinPath .BUILD_ROOT "sentry_webhook"}}'}
-
   shadowbox:
     taskfile: ./src/shadowbox/Taskfile.yml
     vars: {OUTPUT_BASE: '{{joinPath .BUILD_ROOT "shadowbox"}}'}
@@ -68,4 +64,4 @@ tasks:
 
   test:
     desc: Run all the repository tests
-    deps: [lint, metrics_server:test, sentry_webhook:test, shadowbox:test]
+    deps: [lint, metrics_server:test, shadowbox:test]
