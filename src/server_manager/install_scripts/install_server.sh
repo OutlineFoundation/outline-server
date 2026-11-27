@@ -154,6 +154,10 @@ function verify_docker_running() {
 }
 
 function fetch() {
+  if ! command_exists curl; then
+    log_error "curl is not installed. Please install curl before running this script."
+    exit 1
+  fi
   curl --silent --show-error --fail "$@"
 }
 
